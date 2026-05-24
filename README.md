@@ -22,17 +22,20 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
   <img alt="BSM call pricing throughput: pyvolr vs py_vollib, log-log scaling by array size" src="docs/assets/perf-light.svg">
 </picture>
 
-| Scenario                  |   pyvolr | py_vollib | speedup |
-| ------------------------- | -------: | --------: | ------: |
-| `price`, scalar           |   4.0 µs |    2.0 µs |    0.5× |
-| `price`, 1k strikes       |  25.4 µs |   2.16 ms |     85× |
-| `price`, 10k strikes      |   157 µs |  21.73 ms |    139× |
-| `price`, 100k strikes     |  1.48 ms | 217.53 ms |    147× |
-| `price`, 1M strikes       | 15.18 ms |  2,204 ms |    145× |
-| all 5 Greeks, 10k strikes |   593 µs |  85.82 ms |    145× |
-| `implied_vol`, scalar     |   3.9 µs |   13.9 µs |    3.6× |
+| Scenario                      |   pyvolr | py_vollib | speedup |
+| ----------------------------- | -------: | --------: | ------: |
+| `bs.price`, scalar            |   4.0 µs |    2.0 µs |    0.5× |
+| `bs.price`, 1k strikes        |  25.4 µs |   2.16 ms |     85× |
+| `bs.price`, 10k strikes       |   157 µs |  21.73 ms |    139× |
+| `bs.price`, 100k strikes      |  1.48 ms | 217.53 ms |    147× |
+| `bs.price`, 1M strikes        | 15.18 ms |  2,204 ms |    145× |
+| `bs.greeks` (all 5), 10k      |   593 µs |  85.82 ms |    145× |
+| `bs.implied_vol`, scalar      |   3.9 µs |   13.9 µs |    3.6× |
+| `black76.price`, scalar       |   3.8 µs |    2.2 µs |    0.6× |
+| `black76.price`, 10k strikes  |   171 µs |  23.45 ms |    137× |
+| `black76.implied_vol`, scalar |   3.9 µs |   15.0 µs |    3.9× |
 
-Vectorize anything you can — that's where pyvolr wins. For a single scalar `price` call, py_vollib's pure-Python path edges out pyvolr because the PyO3 FFI roundtrip + numpy broadcasting setup costs a few microseconds; even a 2-element array call already favors pyvolr.
+Vectorize anything you can — that's where pyvolr wins. For a single scalar `price` call, py_vollib's pure-Python path edges out pyvolr because the PyO3 FFI roundtrip + numpy broadcasting setup costs a few microseconds; even a 2-element array call already favors pyvolr. Black-76's profile tracks BSM's exactly because the Rust core delegates to `bsm::price` with `q=r` rather than duplicating math.
 
 Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.0 vs py_vollib 1.0.1.
 

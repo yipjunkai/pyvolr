@@ -27,6 +27,10 @@ import statistics
 import time
 
 import numpy as np
+from py_vollib.black import black as pvol_black
+from py_vollib.black.implied_volatility import (
+    implied_volatility as pvol_black_iv,
+)
 from py_vollib.black_scholes import black_scholes as pvol_price
 from py_vollib.black_scholes.greeks.analytical import (
     delta as pvol_delta,
@@ -47,6 +51,7 @@ from py_vollib.black_scholes.implied_volatility import (
     implied_volatility as pvol_iv,
 )
 
+from pyvolr import black76 as pvb
 from pyvolr import bs as pv
 
 
@@ -93,6 +98,16 @@ def pvol_array_greeks(strikes):
     )
 
 
+# Black-76: same inputs but the underlying is the forward F. Use F == S so the
+# magnitudes match the BSM rows above and the speedup numbers are directly
+# comparable. ref_b76_price is the Black-76 price used for IV inversion.
+ref_b76_price = pvb.price("c", F=S, K=K, T=T, r=r, sigma=sigma)
+
+
+def pvol_black_array_price(strikes):
+    return np.array([pvol_black("c", S, k, T, r, sigma) for k in strikes])
+
+
 scenarios = [
     (
         "price, scalar",
@@ -134,6 +149,27 @@ scenarios = [
         "implied_vol, scalar",
         lambda: pv.implied_vol(price=ref_price, flag="c", S=S, K=K, T=T, r=r),
         lambda: pvol_iv(ref_price, S, K, T, r, "c"),
+        5_000,
+    ),
+    # Black-76 rows: structurally identical machinery (the Rust core delegates
+    # to bsm::price with q=r), so expect speedups very close to the BSM rows.
+    (
+        "black76 price, scalar",
+        lambda: pvb.price("c", F=S, K=K, T=T, r=r, sigma=sigma),
+        lambda: pvol_black("c", S, K, T, r, sigma),
+        20_000,
+    ),
+    (
+        "black76 price, 10k strikes",
+        lambda: pvb.price("c", F=S, K=strikes_10k, T=T, r=r, sigma=sigma),
+        lambda: pvol_black_array_price(strikes_10k),
+        50,
+    ),
+    (
+        "black76 implied_vol, scalar",
+        lambda: pvb.implied_vol(price=ref_b76_price, flag="c", F=S, K=K, T=T, r=r),
+        # py_vollib.black IV: (price, F, K, r, t, flag) — r and t swapped vs BSM.
+        lambda: pvol_black_iv(ref_b76_price, S, K, r, T, "c"),
         5_000,
     ),
 ]
