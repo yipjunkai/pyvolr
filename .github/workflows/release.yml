@@ -70,14 +70,16 @@ jobs:
         env:
           CIBW_BUILD: ${{ matrix.platform.cibw }}
           CIBW_ARCHS: ${{ matrix.platform.archs }}
-          CIBW_SKIP: "pp*"
           # macos-14 runner is arm64. cibuildwheel CAN build x86_64 wheels there
           # via Apple's cross-build SDK, but the resulting binary can't be exec'd
           # on the arm64 runner to run pytest. Skip testing x86_64 macOS wheels
           # only; Linux/Windows are native-arch and tests run normally.
           CIBW_TEST_SKIP: "*-macosx_x86_64"
-          # Enable free-threaded CPython 3.13t builds (cp314t is enabled by default in v3.4+).
-          CIBW_ENABLE: "cpython-freethreading"
+          # MACOSX_DEPLOYMENT_TARGET: cibuildwheel's default of 10.9 conflicts
+          # with rustc's minimum of 10.12 — built binaries target 10.12+ but
+          # delocate then rejects the wheel because the manifest says 10.9.
+          # 10.13 (High Sierra, 2017) is the modern floor; safe for all users.
+          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=10.13"
           CIBW_BUILD_FRONTEND: "build"
           # Linux wheels build inside manylinux containers that don't have Rust.
           # Install rustup per-container with `--profile minimal --default-toolchain stable`
