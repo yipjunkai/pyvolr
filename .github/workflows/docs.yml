@@ -34,11 +34,12 @@ jobs:
           python-version: "3.12"
       - name: Install docs deps
         run: |
-          uv pip install --system --break-system-packages mkdocs mkdocs-material 'mkdocstrings[python]' mike
+          uv venv
+          uv pip install mkdocs mkdocs-material 'mkdocstrings[python]' mike
       - name: Build docs (skipped if no mkdocs.yml yet)
         run: |
           if [ -f mkdocs.yml ]; then
-            mkdocs build --strict
+            uv run mkdocs build --strict
           else
             echo "::notice::mkdocs.yml not present yet; docs build skipped."
             mkdir -p site && echo "<h1>pyvolr docs coming soon</h1>" > site/index.html

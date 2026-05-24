@@ -35,9 +35,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install pip-audit
-        run: uv pip install --system --break-system-packages pip-audit
+        run: |
+          uv venv
+          uv pip install pip-audit
       - name: Audit declared dependencies
-        run: pip-audit --requirement <(uv pip compile pyproject.toml)
+        run: uv run pip-audit --requirement <(uv pip compile pyproject.toml)
 
   dependency-review:
     name: dependency review

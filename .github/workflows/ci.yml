@@ -42,17 +42,19 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Python lint tools
-        run: uv pip install --system --break-system-packages 'ruff>=0.15' 'pyright>=1.1.400'
+        run: |
+          uv venv
+          uv pip install 'ruff>=0.15' 'pyright>=1.1.400'
       - name: cargo fmt
         run: cargo fmt --all --check
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: ruff check
-        run: ruff check .
+        run: uv run ruff check .
       - name: ruff format
-        run: ruff format --check .
+        run: uv run ruff format --check .
       - name: pyright
-        run: pyright
+        run: uv run pyright
       - name: actionlint
         run: |
           curl -sL -o actionlint.tar.gz \
@@ -106,10 +108,11 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Build extension and install with test deps
         run: |
-          uv pip install --system --break-system-packages maturin pytest pytest-benchmark hypothesis numpy
-          maturin develop --release
+          uv venv
+          uv pip install maturin pytest pytest-benchmark hypothesis numpy
+          uv run maturin develop --release
       - name: Run pytest
-        run: pytest -ra
+        run: uv run pytest -ra
 
   property-tests:
     name: property tests (extended)
@@ -123,10 +126,11 @@ jobs:
           python-version: "3.12"
       - name: Build and install
         run: |
-          uv pip install --system --break-system-packages maturin pytest hypothesis numpy
-          maturin develop --release
+          uv venv
+          uv pip install maturin pytest hypothesis numpy
+          uv run maturin develop --release
       - name: Hypothesis thorough profile
-        run: pytest -m property --hypothesis-profile=thorough
+        run: uv run pytest -m property --hypothesis-profile=thorough
 
   msrv:
     name: msrv
