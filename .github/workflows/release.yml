@@ -99,24 +99,6 @@ jobs:
           skip-existing: true
           print-hash: true
 
-  publish-crates-io:
-    name: publish to crates.io
-    needs: [publish-pypi]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    environment:
-      name: crates-io
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - name: Publish crate
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          # NOTE: once crates.io Trusted Publishing is stable, replace the
-          # CARGO_REGISTRY_TOKEN secret with an OIDC-acquired token.
-          cargo publish -p pyvolr-core --no-verify
-
   create-release:
     name: create github release
     needs: [publish-pypi]
