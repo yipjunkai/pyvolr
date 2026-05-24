@@ -1,0 +1,12 @@
+# taplo formatting config. The defaults are fine; this file just exists to
+# scope the scan to project files. taplo does NOT honor .gitignore.
+exclude = [
+  ".venv/**",
+  "target/**",
+  "wheelhouse/**",
+  "dist/**",
+  "build/**",
+  ".pytest_cache/**",
+  ".ruff_cache/**",
+  "**/__pycache__/**",
+]
