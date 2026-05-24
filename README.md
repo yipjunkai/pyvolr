@@ -53,7 +53,7 @@ Or via [`uv`](https://github.com/astral-sh/uv):
 uv pip install pyvolr
 ```
 
-Pre-built wheels are published for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and Windows (x86_64) across Python 3.10–3.14.
+Pre-built wheels are published for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and Windows (x86_64) across Python 3.10–3.14, plus free-threaded builds for 3.13t and 3.14t.
 
 ### Tested on
 
@@ -63,7 +63,7 @@ Pre-built wheels are published for Linux (x86_64, aarch64), macOS (Intel, Apple 
 | macOS   |  ✅  |  ✅  |  ✅  |  ✅  |  ✅  |
 | Windows |  —   |  —   |  ✅  |  ✅  |  ✅  |
 
-Every push and PR runs the full `pytest` + `cargo test` suites across the matrix above. Windows × {3.10, 3.11} are skipped intentionally to keep CI minutes reasonable — the wheels themselves still build for those combinations and are published.
+Every push and PR runs the full `pytest` + `cargo test` suites across the matrix above. Windows × {3.10, 3.11} are skipped intentionally to keep CI minutes reasonable — the wheels themselves still build for those combinations and are published. Free-threaded wheels (3.13t, 3.14t) are built and exercised through `cibuildwheel`'s in-wheel test pass on every release across Linux/macOS/Windows.
 
 From source (requires Rust):
 
@@ -110,6 +110,7 @@ surface = bs.price("c", S=100, K=strike_grid, T=0.5, r=0.05, sigma=vol_grid)
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
 - **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree for one-import-line migration
 - **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
+- **Free-threaded Python ready** — dedicated wheels for 3.13t and 3.14t; the Rust core releases the GIL around the math, so pricing scales across threads without a process pool
 - **Typed end-to-end** — pyright-strict library code, full type stubs for the Rust extension
 
 ## 🗺️ Coming soon
