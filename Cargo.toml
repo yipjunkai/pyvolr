@@ -3,7 +3,10 @@ members = ["crates/core"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+# version intentionally NOT inherited: each crate carries its own literal
+# [package].version so release-please can update it via the standard Rust
+# strategy. Workspace inheritance for version is incompatible with
+# release-please-action v4 + release-type=rust.
 edition = "2021"
 rust-version = "1.78"
 license = "MIT OR Apache-2.0"
