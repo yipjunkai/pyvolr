@@ -303,3 +303,9 @@ wheelhouse/
 
 # pytest-benchmark output (written by bench.yml workflow)
 bench.json
+
+# cargo-fuzz artifacts (corpus, crashes, build cache)
+fuzz/target/
+fuzz/artifacts/
+fuzz/corpus/
+fuzz/coverage/

@@ -4,10 +4,12 @@
 //! is responsible for broadcasting and reshape; this layer assumes equal-length
 //! contiguous f64 (and i8 for option-flag) inputs.
 
-mod bsm;
-mod greeks;
-mod iv;
-mod normal;
+// Modules are pub so the pyvolr-fuzz workspace (fuzz/) can drive them
+// directly. The PyO3 surface below is the only consumer in normal builds.
+pub mod bsm;
+pub mod greeks;
+pub mod iv;
+pub mod normal;
 
 use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;

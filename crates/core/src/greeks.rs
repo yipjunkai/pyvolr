@@ -11,6 +11,7 @@
 use crate::bsm::{d1_d2, Flag};
 use crate::normal::{cdf, pdf};
 
+/// First derivative of price with respect to spot. Range: `(-exp(-qT), exp(-qT))`.
 pub fn delta(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
     if t <= 0.0 || sigma <= 0.0 {
         let in_the_money = match flag {
@@ -35,6 +36,7 @@ pub fn delta(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> 
     }
 }
 
+/// Second derivative of price with respect to spot. Always non-negative; identical for call and put.
 pub fn gamma(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
     if t <= 0.0 || sigma <= 0.0 {
         return 0.0;
@@ -44,6 +46,8 @@ pub fn gamma(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
     disc_q * pdf(d1) / (s * sigma * t.sqrt())
 }
 
+/// Derivative of price with respect to volatility, per unit vol (not per 1%).
+/// Always non-negative; identical for call and put.
 pub fn vega(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
     if t <= 0.0 || sigma <= 0.0 {
         return 0.0;
@@ -53,6 +57,8 @@ pub fn vega(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
     s * disc_q * pdf(d1) * t.sqrt()
 }
 
+/// Derivative of price with respect to time-to-expiry (per year, annualized).
+/// Divide by 365 (or 252) for the per-day convention used by some libraries.
 pub fn theta(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
     if t <= 0.0 || sigma <= 0.0 {
         return 0.0;
@@ -67,6 +73,7 @@ pub fn theta(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> 
     }
 }
 
+/// Derivative of price with respect to the risk-free rate, per unit `r`.
 pub fn rho(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
     if t <= 0.0 || sigma <= 0.0 {
         return 0.0;

@@ -1,0 +1,34 @@
+# Standalone workspace — fuzz/ is intentionally excluded from the main
+# workspace at /Cargo.toml so nightly/libfuzzer deps don't infect normal
+# `cargo check` / `cargo test` builds.
+[workspace]
+
+[package]
+name = "pyvolr-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = { version = "1", features = ["derive"] }
+libfuzzer-sys = "0.4"
+pyvolr-core = { path = "../crates/core" }
+
+# Fuzz targets are separate binaries. Names + paths declared explicitly so
+# cargo-fuzz finds them without convention magic.
+[[bin]]
+name = "bsm_price"
+path = "fuzz_targets/bsm_price.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "iv_solve"
+path = "fuzz_targets/iv_solve.rs"
+test = false
+doc = false
+bench = false

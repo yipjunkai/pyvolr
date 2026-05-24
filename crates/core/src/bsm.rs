@@ -9,7 +9,9 @@ use crate::normal::cdf;
 /// Option type. Maps to/from `i8` (`>=0` -> Call, `<0` -> Put) for FFI.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Flag {
+    /// Call option: right to buy at strike.
     Call,
+    /// Put option: right to sell at strike.
     Put,
 }
 

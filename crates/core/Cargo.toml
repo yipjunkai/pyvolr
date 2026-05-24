@@ -11,7 +11,10 @@ authors.workspace = true
 readme = "../../README.md"
 
 [lib]
-name = "_core"
+# Default name "pyvolr_core" (from package name). Maturin renames the built
+# artifact to "_core" at install time per `[tool.maturin].module-name =
+# "pyvolr._core"` in pyproject.toml, so the Python import path stays unchanged.
+# Keeping the default lib name lets fuzz/ and other dependents `use pyvolr_core`.
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

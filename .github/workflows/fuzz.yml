@@ -1,0 +1,59 @@
+name: fuzz
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # daily 03:00 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/core/src/**"
+      - "fuzz/**"
+      - ".github/workflows/fuzz.yml"
+
+concurrency:
+  group: fuzz-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: fuzz (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [bsm_price, iv_solve]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          # pyo3 (transitively required via pyvolr-core) needs a Python
+          # interpreter on PATH satisfying abi3-py310 at build time.
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: nightly
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: fuzz
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz ${{ matrix.target }}
+        # PR runs: 60s smoke per target.  Nightly/manual: 300s per target.
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            DURATION=60
+          else
+            DURATION=300
+          fi
+          cargo fuzz run ${{ matrix.target }} -- -max_total_time=$DURATION
+        working-directory: fuzz
+      - name: Upload crashes (on failure)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: fuzz-crashes-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          retention-days: 30
