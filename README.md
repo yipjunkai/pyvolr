@@ -158,7 +158,7 @@ pyvolr/
 │   ├── _core.pyi            # Type stubs for the Rust extension
 │   └── compat/py_vollib/    # Drop-in shim mirroring py_vollib's tree
 ├── tests/                   # pytest + hypothesis property tests
-├── .github/workflows/       # ci, release, differential, security, docs, …
+├── .github/workflows/       # ci, release, release-please, differential, fuzz, security, scorecard, stale
 ├── Cargo.toml               # Rust workspace
 └── pyproject.toml           # maturin build backend + project config
 ```

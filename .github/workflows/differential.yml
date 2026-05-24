@@ -1,0 +1,45 @@
+name: differential
+
+# Compares pyvolr's compat shim to the reference py_vollib library across a
+# grid of inputs. Catches numerical drift over time as either library evolves.
+# py_vollib doesn't import on Python 3.12+ (the _testcapi bug — see docs/why.md),
+# so this runs on a 3.10 sidecar.
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # daily at 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: differential-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  differential:
+    name: differential vs py_vollib
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.10"
+      - name: Build pyvolr and install test deps
+        run: |
+          uv venv
+          uv pip install maturin pytest hypothesis numpy py_vollib
+          uv run maturin develop --release
+      - name: Patch py_lets_be_rational for missing _testcapi
+        # uv-managed Pythons (and many production Python distributions) don't
+        # ship CPython's internal _testcapi module — see docs/why.md. The
+        # two-line patch swaps it for sys.float_info, which is where these
+        # values should have been read from in the first place.
+        run: |
+          CONST=$(uv run python -c "import py_lets_be_rational.constants as c; print(c.__file__)")
+          sed -i 's|from _testcapi import DBL_MIN, DBL_MAX|from sys import float_info as _fi; DBL_MIN, DBL_MAX = _fi.min, _fi.max|' "$CONST"
+      - name: Run differential tests
+        run: uv run pytest -m differential -ra
