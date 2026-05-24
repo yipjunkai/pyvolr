@@ -28,14 +28,22 @@ struct Input {
 fuzz_target!(|inp: Input| {
     // The IV solver is only meaningfully defined for the well-conditioned
     // input region. Anything else: just check we don't panic.
+    //
+    // The bounds on `s` and `k` keep the option price within ~1e10 of
+    // magnitude, where the solver's internal absolute PRICE_TOL=1e-10
+    // remains numerically meaningful. For prices around 1e188 (which a
+    // spot price of 1e199 produces), 1e-10 absolute precision exceeds
+    // f64's ~15 significant digits and the solver cannot achieve it.
     if !(inp.s.is_finite()
         && inp.k.is_finite()
         && inp.t.is_finite()
         && inp.r.is_finite()
         && inp.q.is_finite()
         && inp.sigma.is_finite()
-        && inp.s > 0.0
-        && inp.k > 0.0
+        && inp.s > 1e-6
+        && inp.s < 1e9
+        && inp.k > 1e-6
+        && inp.k < 1e9
         && inp.t > 1e-6
         && inp.t < 100.0
         && inp.sigma > 1e-4

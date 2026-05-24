@@ -27,14 +27,21 @@ fuzz_target!(|inp: Input| {
 
     // Invariants for well-conditioned inputs.
     //
-    // The bounds on `r * t` and `q * t` keep the discount factors
-    // `exp(-r*t)` and `exp(-q*t)` finite — `exp(700) ~ 1e304` is the f64
-    // overflow threshold. Without these, absurd-but-finite inputs (e.g.
-    // r=-3e304 with tiny t) push the discount factor to +inf and the price
-    // to +inf, which is a legitimate result the assertion below would
-    // otherwise reject. Outside this band the only invariant we still
-    // require is "the pricer didn't panic", which is exercised implicitly
-    // by reaching this point.
+    // The numeric bounds keep the closed-form pricing math inside the
+    // regime where f64 arithmetic faithfully reproduces the analytical
+    // limits, so the strict invariants below are actually meaningful:
+    //
+    //   - `|r*t|`, `|q*t|` < 700: keeps `exp(-r*t)`, `exp(-q*t)` finite
+    //     (exp(709.7) is the f64 overflow threshold).
+    //   - `sigma * sqrt(t)` < 100: keeps `sigma^2 * t` from overflowing to
+    //     +inf in the d1/d2 numerator. When it overflows, BOTH d1 and d2
+    //     become +inf (instead of d1 → +inf, d2 → -inf as the true limit
+    //     requires), and the formula degenerates to `s - k * disc_r` —
+    //     which is wildly negative for k >> s, even though the limiting
+    //     call price should approach `s * disc_q`.
+    //
+    // Outside this band the only invariant we still require is "the pricer
+    // didn't panic", which is exercised implicitly by reaching this point.
     let well_conditioned = inp.s.is_finite()
         && inp.k.is_finite()
         && inp.t.is_finite()
@@ -46,7 +53,8 @@ fuzz_target!(|inp: Input| {
         && inp.t >= 0.0
         && inp.sigma >= 0.0
         && (inp.r * inp.t).abs() < 700.0
-        && (inp.q * inp.t).abs() < 700.0;
+        && (inp.q * inp.t).abs() < 700.0
+        && inp.sigma * inp.t.sqrt() < 100.0;
 
     if well_conditioned {
         assert!(p.is_finite() || p.is_nan(), "non-finite, non-nan: p={p}");
