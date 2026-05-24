@@ -48,22 +48,34 @@ jobs:
         platform:
           # cibw entries cover both abi3 builds (cp310-* picks up everything 3.10+ as a single
           # stable-ABI wheel) and per-version free-threaded builds (cp313t-* / cp314t-*).
-          - { runner: ubuntu-latest,    target: x86_64,  cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*" }
-          - { runner: ubuntu-24.04-arm, target: aarch64, cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*" }
-          - { runner: macos-13,         target: x86_64,  cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*" }
-          - { runner: macos-14,         target: aarch64, cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*" }
-          - { runner: windows-latest,   target: x86_64,  cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*" }
+          #
+          # macOS: macos-14 (Apple Silicon) builds BOTH x86_64 (cross-compiled via Apple SDK)
+          # and arm64 (native).  This avoids the dying macos-13 (Intel) runner pool, which has
+          # become unreliable for queue times.
+          - { runner: ubuntu-latest,    target: x86_64,         cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*", archs: "auto" }
+          - { runner: ubuntu-24.04-arm, target: aarch64,        cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*", archs: "auto" }
+          - { runner: macos-14,         target: x86_64+aarch64, cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*", archs: "x86_64 arm64" }
+          - { runner: windows-latest,   target: x86_64,         cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*", archs: "auto" }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - name: Add x86_64-apple-darwin Rust target (macOS only)
+        if: matrix.platform.runner == 'macos-14'
+        run: rustup target add x86_64-apple-darwin
       - name: Build wheels with cibuildwheel
         uses: pypa/cibuildwheel@8d2b08b68458a16aeb24b64e68a09ab1c8e82084 # v3.4.1
         env:
           CIBW_BUILD: ${{ matrix.platform.cibw }}
+          CIBW_ARCHS: ${{ matrix.platform.archs }}
           CIBW_SKIP: "pp*"
+          # macos-14 runner is arm64. cibuildwheel CAN build x86_64 wheels there
+          # via Apple's cross-build SDK, but the resulting binary can't be exec'd
+          # on the arm64 runner to run pytest. Skip testing x86_64 macOS wheels
+          # only; Linux/Windows are native-arch and tests run normally.
+          CIBW_TEST_SKIP: "*-macosx_x86_64"
           # Enable free-threaded CPython 3.13t builds (cp314t is enabled by default in v3.4+).
           CIBW_ENABLE: "cpython-freethreading"
           CIBW_BUILD_FRONTEND: "build"
