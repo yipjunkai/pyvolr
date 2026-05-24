@@ -95,6 +95,10 @@ strike_grid = np.linspace(80, 120, 5).reshape(-1, 1)
 vol_grid = np.linspace(0.10, 0.40, 4).reshape(1, -1)
 surface = bs.price("c", S=100, K=strike_grid, T=0.5, r=0.05, sigma=vol_grid)
 # shape (5, 4)
+
+# Black-76 for options on futures / forwards — same API, F replaces S, no q.
+from pyvolr import black76
+black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 ```
 
 ## ✨ Features
