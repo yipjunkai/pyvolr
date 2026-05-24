@@ -27,21 +27,19 @@ fuzz_target!(|inp: Input| {
 
     // Invariants for well-conditioned inputs.
     //
-    // The numeric bounds keep the closed-form pricing math inside the
-    // regime where f64 arithmetic faithfully reproduces the analytical
-    // limits, so the strict invariants below are actually meaningful:
+    // We check the three places BSM intermediates can overflow:
+    //   - `sigma * sigma` overflowing alone (sigma > ~1.34e154)
+    //   - `sigma * sigma * t` overflowing via the d1/d2 numerator
+    //   - `s * exp(-q*t)` or `k * exp(-r*t)` overflowing in the price line
     //
-    //   - `|r*t|`, `|q*t|` < 700: keeps `exp(-r*t)`, `exp(-q*t)` finite
-    //     (exp(709.7) is the f64 overflow threshold).
-    //   - `sigma * sqrt(t)` < 100: keeps `sigma^2 * t` from overflowing to
-    //     +inf in the d1/d2 numerator. When it overflows, BOTH d1 and d2
-    //     become +inf (instead of d1 → +inf, d2 → -inf as the true limit
-    //     requires), and the formula degenerates to `s - k * disc_r` —
-    //     which is wildly negative for k >> s, even though the limiting
-    //     call price should approach `s * disc_q`.
-    //
-    // Outside this band the only invariant we still require is "the pricer
-    // didn't panic", which is exercised implicitly by reaching this point.
+    // The first two are bounded by capping `sigma` and `sigma * sqrt(t)`.
+    // The last is jointly determined by `s`, `k`, `r*t`, `q*t` (can't be
+    // bounded with single-variable constraints), so we just compute the
+    // products and require them to be finite. Outside this set the only
+    // invariant we still require is "the pricer didn't panic".
+    let s_disc_q = inp.s * (-inp.q * inp.t).exp();
+    let k_disc_r = inp.k * (-inp.r * inp.t).exp();
+
     let well_conditioned = inp.s.is_finite()
         && inp.k.is_finite()
         && inp.t.is_finite()
@@ -52,21 +50,12 @@ fuzz_target!(|inp: Input| {
         && inp.k >= 0.0
         && inp.t >= 0.0
         && inp.sigma >= 0.0
-        && (inp.r * inp.t).abs() < 700.0
-        && (inp.q * inp.t).abs() < 700.0
+        && inp.sigma < 1e150
         && inp.sigma * inp.t.sqrt() < 100.0
-        // Absolute bounds on individual parameters: the constraints above
-        // bound *products* (r*t, sigma*sqrt(t)), but the BSM formula also
-        // computes intermediates like `0.5 * sigma * sigma` (overflows to
-        // +inf for sigma > ~1.34e154) and `r - q` (overflows when both are
-        // near f64::MAX with opposite signs). Once any of these go to ±inf,
-        // both d1 and d2 collapse to +inf instead of taking opposite signs,
-        // and the formula degenerates to `s - k * disc_r` — wildly negative
-        // for k >> s. 1e150 keeps every intermediate finite while still
-        // leaving the fuzzer 150 orders of magnitude past anything real.
         && inp.r.abs() < 1e150
         && inp.q.abs() < 1e150
-        && inp.sigma < 1e150;
+        && s_disc_q.is_finite()
+        && k_disc_r.is_finite();
 
     if well_conditioned {
         assert!(p.is_finite() || p.is_nan(), "non-finite, non-nan: p={p}");
