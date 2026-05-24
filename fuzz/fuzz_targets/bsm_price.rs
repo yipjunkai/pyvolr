@@ -26,6 +26,15 @@ fuzz_target!(|inp: Input| {
     let p = price(flag, inp.s, inp.k, inp.t, inp.r, inp.q, inp.sigma);
 
     // Invariants for well-conditioned inputs.
+    //
+    // The bounds on `r * t` and `q * t` keep the discount factors
+    // `exp(-r*t)` and `exp(-q*t)` finite — `exp(700) ~ 1e304` is the f64
+    // overflow threshold. Without these, absurd-but-finite inputs (e.g.
+    // r=-3e304 with tiny t) push the discount factor to +inf and the price
+    // to +inf, which is a legitimate result the assertion below would
+    // otherwise reject. Outside this band the only invariant we still
+    // require is "the pricer didn't panic", which is exercised implicitly
+    // by reaching this point.
     let well_conditioned = inp.s.is_finite()
         && inp.k.is_finite()
         && inp.t.is_finite()
@@ -35,7 +44,9 @@ fuzz_target!(|inp: Input| {
         && inp.s >= 0.0
         && inp.k >= 0.0
         && inp.t >= 0.0
-        && inp.sigma >= 0.0;
+        && inp.sigma >= 0.0
+        && (inp.r * inp.t).abs() < 700.0
+        && (inp.q * inp.t).abs() < 700.0;
 
     if well_conditioned {
         assert!(p.is_finite() || p.is_nan(), "non-finite, non-nan: p={p}");
