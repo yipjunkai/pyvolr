@@ -1,0 +1,59 @@
+"""Tests for `pyvolr.bs.implied_vol`."""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+import pytest
+
+from pyvolr import bs
+
+
+class TestRoundtrip:
+    """Price -> IV -> price should reproduce the original volatility."""
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    @pytest.mark.parametrize(
+        ("s", "k", "t", "r", "q", "sigma"),
+        [
+            (100.0, 100.0, 1.0, 0.05, 0.0, 0.20),  # ATM
+            (100.0, 110.0, 0.5, 0.03, 0.02, 0.30),  # slightly OTM call
+            (100.0, 90.0, 0.5, 0.03, 0.02, 0.30),  # ITM call
+            (100.0, 80.0, 0.05, 0.03, 0.01, 0.45),  # deep OTM short expiry
+            (100.0, 200.0, 0.5, 0.05, 0.0, 0.30),  # very deep OTM call
+            (100.0, 100.0, 2.0, 0.05, 0.0, 0.60),  # long-dated, high vol
+        ],
+    )
+    def test_roundtrip(
+        self, flag: str, s: float, k: float, t: float, r: float, q: float, sigma: float
+    ) -> None:
+        p = bs.price(flag, S=s, K=k, T=t, r=r, sigma=sigma, q=q)
+        iv = bs.implied_vol(p, flag, S=s, K=k, T=t, r=r, q=q)
+        assert isinstance(iv, float)
+        assert iv == pytest.approx(sigma, abs=1e-6)
+
+
+class TestBoundsHandling:
+    def test_price_below_intrinsic_returns_nan(self) -> None:
+        iv = bs.implied_vol(-1.0, "c", S=100, K=100, T=1.0, r=0.05)
+        assert math.isnan(iv)
+
+    def test_zero_time_returns_nan(self) -> None:
+        iv = bs.implied_vol(5.0, "c", S=100, K=100, T=0.0, r=0.05)
+        assert math.isnan(iv)
+
+    def test_price_above_upper_bound_returns_nan(self) -> None:
+        # Call price cannot exceed S; pass a clearly absurd value.
+        iv = bs.implied_vol(1e9, "c", S=100, K=100, T=1.0, r=0.05)
+        assert math.isnan(iv)
+
+
+class TestVectorized:
+    def test_vector_of_prices(self) -> None:
+        sigmas = np.array([0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50])
+        prices = bs.price("c", S=100, K=100, T=0.5, r=0.05, sigma=sigmas)
+        ivs = bs.implied_vol(prices, "c", S=100, K=100, T=0.5, r=0.05)
+        assert isinstance(ivs, np.ndarray)
+        assert ivs.shape == sigmas.shape
+        np.testing.assert_allclose(ivs, sigmas, atol=1e-6)

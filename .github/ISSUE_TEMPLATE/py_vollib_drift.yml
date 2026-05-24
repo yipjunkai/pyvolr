@@ -1,0 +1,51 @@
+name: py_vollib drift
+description: pyvolr returned a value that disagrees with py_vollib by more than 1e-8.
+labels: ["bug", "py_vollib-drift"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when `pyvolr.compat.py_vollib.X(...)` and the original
+        `py_vollib.X(...)` return materially different values for the same input.
+        These are treated as correctness bugs.
+  - type: textarea
+    id: inputs
+    attributes:
+      label: Exact inputs
+      description: Copy-pasteable Python literals.
+      render: python
+      placeholder: |
+        flag = "c"
+        S, K, t, r, sigma = 100.0, 100.0, 1.0, 0.05, 0.20
+    validations:
+      required: true
+  - type: input
+    id: pyvolr-value
+    attributes:
+      label: pyvolr value
+    validations:
+      required: true
+  - type: input
+    id: vollib-value
+    attributes:
+      label: py_vollib value
+    validations:
+      required: true
+  - type: input
+    id: third-source
+    attributes:
+      label: Third-source check (optional)
+      description: e.g. QuantLib, a textbook example, Wolfram Alpha. Helps identify which side is wrong.
+  - type: input
+    id: pyvolr-version
+    attributes:
+      label: pyvolr version
+    validations:
+      required: true
+  - type: input
+    id: vollib-version
+    attributes:
+      label: py_vollib version + Python version it imported under
+      placeholder: e.g. py_vollib 1.0.3 on Python 3.10.14
+    validations:
+      required: true

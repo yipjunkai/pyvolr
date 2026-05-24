@@ -1,0 +1,195 @@
+# pyvolr
+
+[![PyPI](https://img.shields.io/pypi/v/pyvolr.svg)](https://pypi.org/project/pyvolr/)
+[![CI](https://github.com/yipjunkai/pyvolr/actions/workflows/ci.yml/badge.svg)](https://github.com/yipjunkai/pyvolr/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#-license)
+[![Python: 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://pypi.org/project/pyvolr/)
+
+**Modern Black-Scholes-Merton pricing, Greeks, and implied volatility for Python.** Rust core. Vectorized. Drop-in replacement for the abandoned `py_vollib`.
+
+```python
+from pyvolr import bs
+
+bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2)
+# 4.581680167540007
+```
+
+## ⚙️ How it works
+
+```text
+Your Python code
+       │
+       ▼
+┌──────────────────┐
+│  pyvolr.bs       │  numpy broadcasting, flag normalization,
+│  (Python)        │  scalar/array dispatch
+└────────┬─────────┘
+         │  flat f64 + i8 numpy arrays
+         ▼
+┌──────────────────┐
+│  pyvolr._core    │  PyO3 bindings, GIL released around the math
+│  (Rust ext)      │
+└────────┬─────────┘
+         │  zero-copy slices via ndarray
+         ▼
+┌──────────────────┐
+│  pyvolr-core     │  BSM pricing, analytical Greeks, IV solver
+│  (Rust crate)    │  pure Rust, libm::erf, no Python dependency
+└──────────────────┘
+```
+
+Inputs are broadcast and ravelled in Python, the Rust core operates on flat slices, results are reshaped on return. abi3 wheels mean a single binary works across Python 3.10–3.14 — no compiler required.
+
+## 📦 Install
+
+```bash
+pip install pyvolr
+```
+
+Or via [`uv`](https://github.com/astral-sh/uv):
+
+```bash
+uv pip install pyvolr
+```
+
+Pre-built wheels are published for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and Windows (x86_64) across Python 3.10–3.14.
+
+From source (requires Rust):
+
+```bash
+git clone https://github.com/yipjunkai/pyvolr
+cd pyvolr
+uv venv --python 3.12 && source .venv/bin/activate
+uv pip install -e ".[dev,test]"
+maturin develop --release
+```
+
+## 🚀 Quick start
+
+```python
+import numpy as np
+from pyvolr import bs
+
+# Scalar
+bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2)
+
+# Vectorized — broadcast over any combination of inputs
+strikes = np.linspace(80, 120, 41)
+prices = bs.price("c", S=100, K=strikes, T=0.5, r=0.05, sigma=0.2)
+
+# All five Greeks in one call
+greeks = bs.greeks("c", S=100, K=strikes, T=0.5, r=0.05, sigma=0.2)
+# {"delta": [...], "gamma": [...], "theta": [...], "vega": [...], "rho": [...]}
+
+# Implied volatility from a market price
+bs.implied_vol(price=5.20, flag="c", S=100, K=100, T=0.25, r=0.05)
+
+# Broadcasting works in any dimension
+strike_grid = np.linspace(80, 120, 5).reshape(-1, 1)
+vol_grid = np.linspace(0.10, 0.40, 4).reshape(1, -1)
+surface = bs.price("c", S=100, K=strike_grid, T=0.5, r=0.05, sigma=vol_grid)
+# shape (5, 4)
+```
+
+## ✨ Features
+
+- **Black-Scholes-Merton pricing** — calls and puts with continuous dividend yield
+- **Analytical Greeks** — delta, gamma, theta, vega, rho (with documented sign and unit conventions)
+- **Robust implied volatility** — Newton-Raphson seeded by Manaster-Koehler, bisection fallback for OTM tails and tiny-vega regimes
+- **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
+- **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree for one-import-line migration
+- **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
+- **Typed end-to-end** — pyright-strict library code, full type stubs for the Rust extension
+
+## 🗺️ Coming soon
+
+- [ ] Jäckel "Let's Be Rational" implied volatility (2-iteration convergence)
+- [ ] Black-76 (futures options)
+- [ ] Bachelier (normal model, for negative rates)
+- [ ] Higher-order Greeks (vanna, vomma, charm, speed, zomma, color)
+- [ ] SIMD batch evaluation + `rayon` parallelism for large arrays
+- [ ] American options (CRR binomial → finite difference)
+- [ ] Volatility surface fitting (SVI, SSVI)
+
+## 🔄 Migrating from py_vollib
+
+Replace your imports — the signatures and `'c'`/`'p'` flag convention are preserved exactly:
+
+```python
+# Before
+from py_vollib.black_scholes import black_scholes
+from py_vollib.black_scholes.greeks.analytical import delta
+from py_vollib.black_scholes.implied_volatility import implied_volatility
+
+# After
+from pyvolr.compat.py_vollib.black_scholes import black_scholes
+from pyvolr.compat.py_vollib.black_scholes.greeks.analytical import delta
+from pyvolr.compat.py_vollib.black_scholes.implied_volatility import implied_volatility
+```
+
+The compat shim also preserves py_vollib's *unit conventions*: vega is per-1% vol, theta is per-day, rho is per-1% rate, and `implied_volatility` takes `flag` as its last argument. For new code, prefer the modern `pyvolr.bs` API — it accepts numpy arrays, broadcasts naturally, uses per-unit conventions consistently, and returns all Greeks in a single call.
+
+## 🤔 Why pyvolr exists
+
+`py_vollib` has been broken on Python 3.12+ since the release — a transitive dependency imports `DBL_MIN` / `DBL_MAX` from CPython's internal `_testcapi` test module, which isn't shipped with modern Python distributions. The fix is two lines (`sys.float_info.{min,max}` are the correct sources), but `py_lets_be_rational` hasn't released since 2017, `py_vollib` since 2020, and the maintainers are gone.
+
+Full backstory: [docs/why.md](docs/why.md).
+
+## 📁 Project structure
+
+```text
+pyvolr/
+├── crates/core/             # Rust numerical core
+│   └── src/
+│       ├── lib.rs           # PyO3 bindings (flat-array entry points)
+│       ├── bsm.rs           # BSM pricing, d1/d2, forward price
+│       ├── greeks.rs        # Delta, gamma, theta, vega, rho
+│       ├── iv.rs            # Newton + Manaster-Koehler + bisection IV solver
+│       └── normal.rs        # erf-based standard normal CDF / PDF
+├── python/pyvolr/
+│   ├── bs.py                # Public API (numpy-broadcast wrappers)
+│   ├── _core.pyi            # Type stubs for the Rust extension
+│   └── compat/py_vollib/    # Drop-in shim mirroring py_vollib's tree
+├── tests/                   # pytest + hypothesis property tests
+├── .github/workflows/       # ci, release, differential, security, docs, …
+├── Cargo.toml               # Rust workspace
+└── pyproject.toml           # maturin build backend + project config
+```
+
+## 📚 API reference
+
+| Function | Returns | Vectorized over |
+| --- | --- | --- |
+| `bs.price(flag, S, K, T, r, sigma, q=0)` | option price | all numeric inputs |
+| `bs.delta(flag, S, K, T, r, sigma, q=0)` | ∂Price/∂S | all numeric inputs |
+| `bs.gamma(S, K, T, r, sigma, q=0)` | ∂²Price/∂S² | all numeric inputs |
+| `bs.vega(S, K, T, r, sigma, q=0)` | ∂Price/∂σ (per unit vol) | all numeric inputs |
+| `bs.theta(flag, S, K, T, r, sigma, q=0)` | −∂Price/∂T (per year) | all numeric inputs |
+| `bs.rho(flag, S, K, T, r, sigma, q=0)` | ∂Price/∂r (per unit r) | all numeric inputs |
+| `bs.greeks(flag, S, K, T, r, sigma, q=0)` | `dict` of all five Greeks | all numeric inputs |
+| `bs.implied_vol(price, flag, S, K, T, r, q=0)` | σ (NaN on bound violation) | price + numeric inputs |
+| `pyvolr.compat.py_vollib.…` | py_vollib-shaped scalars | n/a (scalar API) |
+
+`flag` accepts `'c'`/`'C'` (call), `'p'`/`'P'` (put), or an array thereof.
+
+## 🛡️ Sustainability
+
+`py_vollib` died because nobody was paid to maintain it. pyvolr is engineered to outlive its maintainer:
+
+- **One-click releases** via release-please + PyPI Trusted Publishing (no stored credentials, no manual `twine upload`)
+- **Nightly differential tests** against `py_vollib` on a Python 3.10 sidecar to catch numerical drift
+- **Wide CI matrix** (Python 3.10–3.14 × Linux/macOS/Windows) — the specific failure mode that killed the predecessor
+- **All GitHub Actions pinned** with weekly Dependabot bumps, hardening against supply-chain attacks
+- **Hand-off plan documented** in [GOVERNANCE.md](GOVERNANCE.md)
+
+Commercial sponsorship channels will be added if demand warrants. For now the best support is real-world use, good bug reports, and PRs.
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Particularly welcome: new pricing models (Black-76, Bachelier, American), higher-order Greeks, SIMD/vectorization work, and property tests for edge cases.
+
+## 📄 License
+
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option.
+
+Algorithms are reimplemented from published references (Hull, Merton, Manaster-Koehler); no third-party source code is incorporated.

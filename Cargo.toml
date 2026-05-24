@@ -1,0 +1,41 @@
+[workspace]
+members = ["crates/core"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yipjunkai/pyvolr"
+homepage = "https://github.com/yipjunkai/pyvolr"
+authors = ["pyvolr contributors"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Numerical code routinely mixes f64 / u32 / usize; the casts are intentional.
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+# PyO3 / numpy idioms that clippy::pedantic does not understand.
+needless_pass_by_value = "allow"   # PyReadonlyArray is small and passed by value by convention.
+useless_conversion = "allow"       # The `?` on `as_slice()?` converts a real error type.
+similar_names = "allow"            # s, k, t, r, q, sigma are domain-standard names.
+# Stylistic noise.
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+module_name_repetitions = "allow"
+too_many_arguments = "allow"       # BSM intrinsically takes 6-7 scalars.
+many_single_char_names = "allow"   # Same reason.
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

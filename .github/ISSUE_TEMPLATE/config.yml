@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/yipjunkai/pyvolr/security/advisories/new
+    about: Please report security vulnerabilities privately, not as a public issue.
+  - name: Discussion / question
+    url: https://github.com/yipjunkai/pyvolr/discussions
+    about: For open-ended questions and design discussions.

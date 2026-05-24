@@ -1,0 +1,130 @@
+name: release
+
+# Builds and publishes wheels on tag push (e.g. v0.1.0). Tags are normally
+# created by release-please.yml when a Release PR is merged.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build wheels but do not publish"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-sdist:
+    name: build sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v3
+      - name: Build sdist
+        run: |
+          uv pip install --system maturin
+          maturin sdist --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          retention-days: 7
+
+  build-wheels:
+    name: wheels (${{ matrix.platform.runner }} / ${{ matrix.platform.target }})
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { runner: ubuntu-latest,   target: x86_64,        cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
+          - { runner: ubuntu-24.04-arm, target: aarch64,       cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
+          - { runner: macos-13,        target: x86_64,        cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
+          - { runner: macos-14,        target: aarch64,       cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
+          - { runner: windows-latest,  target: x86_64,        cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build wheels with cibuildwheel
+        uses: pypa/cibuildwheel@v2.21
+        env:
+          CIBW_BUILD: ${{ matrix.platform.cibw }}
+          CIBW_SKIP: "pp* *-musllinux*"
+          CIBW_BUILD_FRONTEND: "build"
+          CIBW_BEFORE_BUILD: "pip install maturin"
+          CIBW_TEST_REQUIRES: "pytest hypothesis numpy"
+          CIBW_TEST_COMMAND: "pytest {project}/tests -ra"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.platform.runner }}-${{ matrix.platform.target }}
+          path: wheelhouse/*.whl
+          retention-days: 7
+
+  publish-pypi:
+    name: publish to PyPI
+    needs: [build-sdist, build-wheels]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pyvolr
+    permissions:
+      id-token: write  # Required for Trusted Publishing (OIDC).
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish to PyPI via Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+          print-hash: true
+
+  publish-crates-io:
+    name: publish to crates.io
+    needs: [publish-pypi]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: crates-io
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish crate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          # NOTE: once crates.io Trusted Publishing is stable, replace the
+          # CARGO_REGISTRY_TOKEN secret with an OIDC-acquired token.
+          cargo publish -p pyvolr-core --no-verify
+
+  create-release:
+    name: create github release
+    needs: [publish-pypi]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*

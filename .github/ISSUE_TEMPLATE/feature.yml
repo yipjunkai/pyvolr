@@ -1,0 +1,41 @@
+name: Feature request
+description: New model, new Greek, performance improvement, ergonomics.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: What problem are you trying to solve? Why does this matter for pricing/risk work?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should the API look like? Include a code sketch if you can.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: scope
+    attributes:
+      label: How big a change?
+      options:
+        - "Small (~hours of work)"
+        - "Medium (~days)"
+        - "Large (~weeks)"
+        - "Not sure"
+    validations:
+      required: true
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Would you contribute the implementation?
+      options:
+        - label: "I'd like to open a PR for this myself."
+        - label: "I'd review or test a PR from someone else."

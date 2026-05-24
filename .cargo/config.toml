@@ -1,0 +1,16 @@
+# macOS PyO3 extension-module linkage: allow Python symbols to be resolved at
+# load time rather than statically. This is what maturin sets automatically;
+# we replicate it here so `cargo build` / `cargo test` also work standalone
+# during local development.
+
+[target.x86_64-apple-darwin]
+rustflags = [
+    "-C", "link-arg=-undefined",
+    "-C", "link-arg=dynamic_lookup",
+]
+
+[target.aarch64-apple-darwin]
+rustflags = [
+    "-C", "link-arg=-undefined",
+    "-C", "link-arg=dynamic_lookup",
+]

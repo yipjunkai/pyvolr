@@ -1,0 +1,27 @@
+[package]
+name = "pyvolr-core"
+description = "Rust core for pyvolr: Black-Scholes-Merton pricing, Greeks, and implied volatility."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "../../README.md"
+
+[lib]
+name = "_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py310"] }
+numpy = "0.22"
+ndarray = "0.16"
+libm = "0.2"
+
+[dev-dependencies]
+approx = "0.5"
+
+[lints]
+workspace = true
