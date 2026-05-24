@@ -225,7 +225,6 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "libm",
- "ndarray",
  "numpy",
  "pyo3",
 ]
