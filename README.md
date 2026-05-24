@@ -54,6 +54,16 @@ uv pip install pyvolr
 
 Pre-built wheels are published for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and Windows (x86_64) across Python 3.10–3.14.
 
+### Tested on
+
+|         | 3.10 | 3.11 | 3.12 | 3.13 | 3.14 |
+| ------- | :--: | :--: | :--: | :--: | :--: |
+| Linux   |  ✅  |  ✅  |  ✅  |  ✅  |  ✅  |
+| macOS   |  ✅  |  ✅  |  ✅  |  ✅  |  ✅  |
+| Windows |  —   |  —   |  ✅  |  ✅  |  ✅  |
+
+Every push and PR runs the full `pytest` + `cargo test` suites across the matrix above. Windows × {3.10, 3.11} are skipped intentionally to keep CI minutes reasonable — the wheels themselves still build for those combinations and are published.
+
 From source (requires Rust):
 
 ```bash
@@ -127,7 +137,7 @@ from pyvolr.compat.py_vollib.black_scholes.greeks.analytical import delta
 from pyvolr.compat.py_vollib.black_scholes.implied_volatility import implied_volatility
 ```
 
-The compat shim also preserves py_vollib's *unit conventions*: vega is per-1% vol, theta is per-day, rho is per-1% rate, and `implied_volatility` takes `flag` as its last argument. For new code, prefer the modern `pyvolr.bs` API — it accepts numpy arrays, broadcasts naturally, uses per-unit conventions consistently, and returns all Greeks in a single call.
+The compat shim also preserves py_vollib's _unit conventions_: vega is per-1% vol, theta is per-day, rho is per-1% rate, and `implied_volatility` takes `flag` as its last argument. For new code, prefer the modern `pyvolr.bs` API — it accepts numpy arrays, broadcasts naturally, uses per-unit conventions consistently, and returns all Greeks in a single call.
 
 ## 🤔 Why pyvolr exists
 
@@ -158,17 +168,17 @@ pyvolr/
 
 ## 📚 API reference
 
-| Function | Returns | Vectorized over |
-| --- | --- | --- |
-| `bs.price(flag, S, K, T, r, sigma, q=0)` | option price | all numeric inputs |
-| `bs.delta(flag, S, K, T, r, sigma, q=0)` | ∂Price/∂S | all numeric inputs |
-| `bs.gamma(S, K, T, r, sigma, q=0)` | ∂²Price/∂S² | all numeric inputs |
-| `bs.vega(S, K, T, r, sigma, q=0)` | ∂Price/∂σ (per unit vol) | all numeric inputs |
-| `bs.theta(flag, S, K, T, r, sigma, q=0)` | −∂Price/∂T (per year) | all numeric inputs |
-| `bs.rho(flag, S, K, T, r, sigma, q=0)` | ∂Price/∂r (per unit r) | all numeric inputs |
-| `bs.greeks(flag, S, K, T, r, sigma, q=0)` | `dict` of all five Greeks | all numeric inputs |
+| Function                                       | Returns                    | Vectorized over        |
+| ---------------------------------------------- | -------------------------- | ---------------------- |
+| `bs.price(flag, S, K, T, r, sigma, q=0)`       | option price               | all numeric inputs     |
+| `bs.delta(flag, S, K, T, r, sigma, q=0)`       | ∂Price/∂S                  | all numeric inputs     |
+| `bs.gamma(S, K, T, r, sigma, q=0)`             | ∂²Price/∂S²                | all numeric inputs     |
+| `bs.vega(S, K, T, r, sigma, q=0)`              | ∂Price/∂σ (per unit vol)   | all numeric inputs     |
+| `bs.theta(flag, S, K, T, r, sigma, q=0)`       | −∂Price/∂T (per year)      | all numeric inputs     |
+| `bs.rho(flag, S, K, T, r, sigma, q=0)`         | ∂Price/∂r (per unit r)     | all numeric inputs     |
+| `bs.greeks(flag, S, K, T, r, sigma, q=0)`      | `dict` of all five Greeks  | all numeric inputs     |
 | `bs.implied_vol(price, flag, S, K, T, r, q=0)` | σ (NaN on bound violation) | price + numeric inputs |
-| `pyvolr.compat.py_vollib.…` | py_vollib-shaped scalars | n/a (scalar API) |
+| `pyvolr.compat.py_vollib.…`                    | py_vollib-shaped scalars   | n/a (scalar API)       |
 
 `flag` accepts `'c'`/`'C'` (call), `'p'`/`'P'` (put), or an array thereof.
 
