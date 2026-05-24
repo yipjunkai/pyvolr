@@ -46,11 +46,13 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - { runner: ubuntu-latest,   target: x86_64,        cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
-          - { runner: ubuntu-24.04-arm, target: aarch64,       cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
-          - { runner: macos-13,        target: x86_64,        cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
-          - { runner: macos-14,        target: aarch64,       cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
-          - { runner: windows-latest,  target: x86_64,        cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
+          # cibw entries cover both abi3 builds (cp310-* picks up everything 3.10+ as a single
+          # stable-ABI wheel) and per-version free-threaded builds (cp313t-* / cp314t-*).
+          - { runner: ubuntu-latest,    target: x86_64,  cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*" }
+          - { runner: ubuntu-24.04-arm, target: aarch64, cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*" }
+          - { runner: macos-13,         target: x86_64,  cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*" }
+          - { runner: macos-14,         target: aarch64, cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*" }
+          - { runner: windows-latest,   target: x86_64,  cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*" }
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -58,11 +60,15 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - name: Build wheels with cibuildwheel
-        uses: pypa/cibuildwheel@v2.21
+        uses: pypa/cibuildwheel@v3.4.1
         env:
           CIBW_BUILD: ${{ matrix.platform.cibw }}
           CIBW_SKIP: "pp*"
+          # Enable free-threaded CPython 3.13t builds (cp314t is enabled by default in v3.4+).
+          CIBW_ENABLE: "cpython-freethreading"
           CIBW_BUILD_FRONTEND: "build"
+          # Build envs in cibuildwheel v3 no longer pre-install setuptools/wheel; we still need
+          # maturin explicitly as the build backend.
           CIBW_BEFORE_BUILD: "pip install maturin"
           CIBW_TEST_REQUIRES: "pytest hypothesis numpy"
           CIBW_TEST_COMMAND: "pytest {project}/tests -ra"

@@ -73,7 +73,7 @@ macro_rules! define_price_or_greek {
                     )
                 })
                 .collect();
-            Ok(out.into_pyarray_bound(py))
+            Ok(out.into_pyarray(py))
         }
     };
     ($pyname:ident, $rustfn:path, no_flag) => {
@@ -98,7 +98,7 @@ macro_rules! define_price_or_greek {
             let out: Vec<f64> = (0..n)
                 .map(|i| $rustfn(s[i], k[i], t[i], r[i], q[i], sigma[i]))
                 .collect();
-            Ok(out.into_pyarray_bound(py))
+            Ok(out.into_pyarray(py))
         }
     };
 }
@@ -151,7 +151,7 @@ fn bsm_iv<'py>(
             )
         })
         .collect();
-    Ok(out.into_pyarray_bound(py))
+    Ok(out.into_pyarray(py))
 }
 
 #[pymodule]
