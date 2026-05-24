@@ -100,10 +100,11 @@ surface = bs.price("c", S=100, K=strike_grid, T=0.5, r=0.05, sigma=vol_grid)
 ## ✨ Features
 
 - **Black-Scholes-Merton pricing** — calls and puts with continuous dividend yield
+- **Black-76 pricing** — European options on futures/forwards (`pyvolr.black76`), same vectorized API as `bs`
 - **Analytical Greeks** — delta, gamma, theta, vega, rho (with documented sign and unit conventions)
 - **Robust implied volatility** — Newton-Raphson seeded by Manaster-Koehler, bisection fallback for OTM tails and tiny-vega regimes
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
-- **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree for one-import-line migration
+- **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree (including `py_vollib.black`) for one-import-line migration
 - **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
 - **Free-threaded Python ready** — dedicated wheels for 3.13t and 3.14t; the Rust core releases the GIL around the math, so pricing scales across threads without a process pool
 - **Typed end-to-end** — pyright-strict library code, full type stubs for the Rust extension
@@ -111,7 +112,6 @@ surface = bs.price("c", S=100, K=strike_grid, T=0.5, r=0.05, sigma=vol_grid)
 ## 🗺️ Coming soon
 
 - [ ] Jäckel "Let's Be Rational" implied volatility (2-iteration convergence)
-- [ ] Black-76 (futures options)
 - [ ] Bachelier (normal model, for negative rates)
 - [ ] Higher-order Greeks (vanna, vomma, charm, speed, zomma, color)
 - [ ] SIMD batch evaluation + `rayon` parallelism for large arrays
@@ -127,11 +127,13 @@ Replace your imports — the signatures and `'c'`/`'p'` flag convention are pres
 from py_vollib.black_scholes import black_scholes
 from py_vollib.black_scholes.greeks.analytical import delta
 from py_vollib.black_scholes.implied_volatility import implied_volatility
+from py_vollib.black import black  # futures options
 
 # After
 from pyvolr.compat.py_vollib.black_scholes import black_scholes
 from pyvolr.compat.py_vollib.black_scholes.greeks.analytical import delta
 from pyvolr.compat.py_vollib.black_scholes.implied_volatility import implied_volatility
+from pyvolr.compat.py_vollib.black import black  # futures options
 ```
 
 The compat shim also preserves py*vollib's \_unit conventions*: vega is per-1% vol, theta is per-day, rho is per-1% rate, and `implied_volatility` takes `flag` as its last argument. For new code, prefer the modern `pyvolr.bs` API — it accepts numpy arrays, broadcasts naturally, uses per-unit conventions consistently, and returns all Greeks in a single call.
@@ -150,11 +152,13 @@ pyvolr/
 │   └── src/
 │       ├── lib.rs           # PyO3 bindings (flat-array entry points)
 │       ├── bsm.rs           # BSM pricing, d1/d2, forward price
+│       ├── black76.rs       # Black-76 (futures options) — delegates to BSM with q=r
 │       ├── greeks.rs        # Delta, gamma, theta, vega, rho
 │       ├── iv.rs            # Newton + Manaster-Koehler + bisection IV solver
 │       └── normal.rs        # erf-based standard normal CDF / PDF
 ├── python/pyvolr/
-│   ├── bs.py                # Public API (numpy-broadcast wrappers)
+│   ├── bs.py                # BSM public API (numpy-broadcast wrappers)
+│   ├── black76.py           # Black-76 public API
 │   ├── _core.pyi            # Type stubs for the Rust extension
 │   └── compat/py_vollib/    # Drop-in shim mirroring py_vollib's tree
 ├── tests/                   # pytest + hypothesis property tests
@@ -175,6 +179,10 @@ pyvolr/
 | `bs.rho(flag, S, K, T, r, sigma, q=0)`         | ∂Price/∂r (per unit r)     | all numeric inputs     |
 | `bs.greeks(flag, S, K, T, r, sigma, q=0)`      | `dict` of all five Greeks  | all numeric inputs     |
 | `bs.implied_vol(price, flag, S, K, T, r, q=0)` | σ (NaN on bound violation) | price + numeric inputs |
+| `black76.price(flag, F, K, T, r, sigma)`       | option price on a forward  | all numeric inputs     |
+| `black76.{delta,gamma,vega,theta,rho}(...)`    | Greeks for Black-76        | all numeric inputs     |
+| `black76.greeks(flag, F, K, T, r, sigma)`      | `dict` of all five Greeks  | all numeric inputs     |
+| `black76.implied_vol(price, flag, F, K, T, r)` | σ (NaN on bound violation) | price + numeric inputs |
 | `pyvolr.compat.py_vollib.…`                    | py_vollib-shaped scalars   | n/a (scalar API)       |
 
 `flag` accepts `'c'`/`'C'` (call), `'p'`/`'P'` (put), or an array thereof.
@@ -193,7 +201,7 @@ Commercial sponsorship channels will be added if demand warrants. For now the be
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Particularly welcome: new pricing models (Black-76, Bachelier, American), higher-order Greeks, SIMD/vectorization work, and property tests for edge cases.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Particularly welcome: new pricing models (Bachelier, American), higher-order Greeks, SIMD/vectorization work, and property tests for edge cases.
 
 ## 📄 License
 
