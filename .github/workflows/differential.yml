@@ -28,7 +28,7 @@ jobs:
           python-version: "3.10"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2.9.1
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.1.0
       - name: Install pyvolr and py_vollib (3.10 sidecar)
         run: |
           uv pip install --system maturin pytest numpy
