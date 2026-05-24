@@ -1,6 +1,6 @@
 # Contributing to pyvolr
 
-Thanks for your interest. pyvolr is maintained by a small team (initially one person) — clear, focused contributions help enormously.
+Thanks for your interest. pyvolr is solo-maintained — clear, focused contributions help enormously. The repo's Discussions, Wiki, Projects, and Sponsorship surfaces are intentionally disabled while it stays this size; **Issues and Pull Requests are the only inbound channels**.
 
 ## Quick start
 
@@ -72,6 +72,6 @@ If you find an input where `pyvolr.compat.py_vollib.X(...)` returns a value that
 - Python: `ruff format` + `ruff check`, type-checked under `pyright` strict mode
 - Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `perf:`, `refactor:`, `test:`) — release-please uses these to generate the changelog and bump versions
 
-## Discussion before large PRs
+## Before large PRs
 
-For anything beyond a bug fix or small feature, please open a discussion or draft issue first. The maintenance budget is finite; ensuring scope alignment up-front avoids wasted work.
+For anything beyond a bug fix or small feature, please open a draft issue first. The maintenance budget is finite; ensuring scope alignment up-front avoids wasted work.

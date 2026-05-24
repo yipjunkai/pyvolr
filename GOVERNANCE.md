@@ -17,7 +17,7 @@ The following commitments aim to keep the project bootstrappable even if the cur
 
 ## Becoming a co-maintainer
 
-If you've contributed substantively (multiple merged PRs, sustained engagement over months) and want commit access, open a discussion. Co-maintainer status comes with:
+If you've contributed substantively (multiple merged PRs, sustained engagement over months) and want commit access, open an issue. Co-maintainer status comes with:
 
 - Triage and merge rights
 - The ability to cut releases
