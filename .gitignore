@@ -297,6 +297,11 @@ $RECYCLE.BIN/
 # Claude
 .claude/
 
+# Override the venv-template's overly-broad `[Ss]cripts` rule (line ~246)
+# so our own scripts/ directory is tracked.
+!scripts/
+!scripts/**
+
 # Maturin / wheel building
 wheelhouse/
 .maturin/
