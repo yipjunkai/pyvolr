@@ -67,6 +67,12 @@ jobs:
           # Enable free-threaded CPython 3.13t builds (cp314t is enabled by default in v3.4+).
           CIBW_ENABLE: "cpython-freethreading"
           CIBW_BUILD_FRONTEND: "build"
+          # Linux wheels build inside manylinux containers that don't have Rust.
+          # Install rustup per-container with `--profile minimal --default-toolchain stable`
+          # and put cargo on PATH so maturin can find it. macOS/Windows use host runners
+          # (which already have Rust via dtolnay/rust-toolchain above), so this is Linux-only.
+          CIBW_BEFORE_ALL_LINUX: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal"
+          CIBW_ENVIRONMENT_LINUX: 'PATH="$HOME/.cargo/bin:$PATH"'
           # Build envs in cibuildwheel v3 no longer pre-install setuptools/wheel; we still need
           # maturin explicitly as the build backend.
           CIBW_BEFORE_BUILD: "pip install maturin"
