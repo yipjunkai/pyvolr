@@ -30,6 +30,25 @@ import pytest
 py_vollib = pytest.importorskip("py_vollib")
 
 # Reference implementations from py_vollib.
+from py_vollib.black import black as _pvol_black
+from py_vollib.black.greeks.analytical import (
+    delta as _pvol_black_delta,
+)
+from py_vollib.black.greeks.analytical import (
+    gamma as _pvol_black_gamma,
+)
+from py_vollib.black.greeks.analytical import (
+    rho as _pvol_black_rho,
+)
+from py_vollib.black.greeks.analytical import (
+    theta as _pvol_black_theta,
+)
+from py_vollib.black.greeks.analytical import (
+    vega as _pvol_black_vega,
+)
+from py_vollib.black.implied_volatility import (
+    implied_volatility as _pvol_black_iv,
+)
 from py_vollib.black_scholes import black_scholes as _pvol_bs
 from py_vollib.black_scholes.greeks.analytical import (
     delta as _pvol_delta,
@@ -50,6 +69,28 @@ from py_vollib.black_scholes.implied_volatility import (
     implied_volatility as _pvol_iv,
 )
 from py_vollib.black_scholes_merton import black_scholes_merton as _pvol_bsm
+
+from pyvolr.compat.py_vollib.black import (
+    black as _pv_black,
+)
+from pyvolr.compat.py_vollib.black.greeks.analytical import (
+    delta as _pv_black_delta,
+)
+from pyvolr.compat.py_vollib.black.greeks.analytical import (
+    gamma as _pv_black_gamma,
+)
+from pyvolr.compat.py_vollib.black.greeks.analytical import (
+    rho as _pv_black_rho,
+)
+from pyvolr.compat.py_vollib.black.greeks.analytical import (
+    theta as _pv_black_theta,
+)
+from pyvolr.compat.py_vollib.black.greeks.analytical import (
+    vega as _pv_black_vega,
+)
+from pyvolr.compat.py_vollib.black.implied_volatility import (
+    implied_volatility as _pv_black_iv,
+)
 
 # pyvolr compat shim — same module tree, same signatures.
 from pyvolr.compat.py_vollib.black_scholes import (
@@ -203,3 +244,97 @@ def test_merton_price_matches_py_vollib(
     pv = _pv_bsm(flag, s, k, t, r, q, sigma)
     ref = _pvol_bsm(flag, s, k, t, r, q, sigma)
     assert pv == pytest.approx(ref, abs=PRICE_TOL)
+
+
+# Black-76: futures options. Same grid shape as BSM; F replaces S.
+FORWARDS = SPOTS
+
+
+@pytest.mark.parametrize(
+    ("f", "k", "t", "r", "sigma", "flag"),
+    _params(FORWARDS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_black76_price_matches_py_vollib(
+    f: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    pv = _pv_black(flag, f, k, t, r, sigma)
+    ref = _pvol_black(flag, f, k, t, r, sigma)
+    assert pv == pytest.approx(ref, abs=PRICE_TOL)
+
+
+@pytest.mark.parametrize(
+    ("f", "k", "t", "r", "sigma", "flag"),
+    _params(FORWARDS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_black76_delta_matches_py_vollib(
+    f: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    pv = _pv_black_delta(flag, f, k, t, r, sigma)
+    ref = _pvol_black_delta(flag, f, k, t, r, sigma)
+    assert pv == pytest.approx(ref, abs=GREEK_TOL)
+
+
+@pytest.mark.parametrize(
+    ("f", "k", "t", "r", "sigma", "flag"),
+    _params(FORWARDS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_black76_gamma_matches_py_vollib(
+    f: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    pv = _pv_black_gamma(flag, f, k, t, r, sigma)
+    ref = _pvol_black_gamma(flag, f, k, t, r, sigma)
+    assert pv == pytest.approx(ref, abs=GREEK_TOL)
+
+
+@pytest.mark.parametrize(
+    ("f", "k", "t", "r", "sigma", "flag"),
+    _params(FORWARDS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_black76_vega_matches_py_vollib(
+    f: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    # py_vollib.black.vega is per 1% vol change. Compat shim preserves this.
+    pv = _pv_black_vega(flag, f, k, t, r, sigma)
+    ref = _pvol_black_vega(flag, f, k, t, r, sigma)
+    assert pv == pytest.approx(ref, abs=GREEK_TOL)
+
+
+@pytest.mark.parametrize(
+    ("f", "k", "t", "r", "sigma", "flag"),
+    _params(FORWARDS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_black76_theta_matches_py_vollib(
+    f: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    # py_vollib.black.theta is per day. Compat shim preserves this.
+    pv = _pv_black_theta(flag, f, k, t, r, sigma)
+    ref = _pvol_black_theta(flag, f, k, t, r, sigma)
+    assert pv == pytest.approx(ref, abs=GREEK_TOL)
+
+
+@pytest.mark.parametrize(
+    ("f", "k", "t", "r", "sigma", "flag"),
+    _params(FORWARDS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_black76_rho_matches_py_vollib(
+    f: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    # py_vollib.black.rho is per 1% rate change. Compat shim preserves this.
+    pv = _pv_black_rho(flag, f, k, t, r, sigma)
+    ref = _pvol_black_rho(flag, f, k, t, r, sigma)
+    assert pv == pytest.approx(ref, abs=GREEK_TOL)
+
+
+@pytest.mark.parametrize(
+    ("f", "k", "t", "r", "sigma", "flag"),
+    _params([100.0], [90.0, 100.0, 110.0], [0.25, 1.0], [0.0, 0.05], SIGMAS, FLAGS),
+)
+def test_black76_iv_matches_py_vollib(
+    f: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    # py_vollib.black IV signature is (price, F, K, r, t, flag) — r/t order
+    # differs from black_scholes.implied_volatility (t/r). Mirror exactly.
+    ref_price = _pvol_black(flag, f, k, t, r, sigma)
+    pv_iv = _pv_black_iv(ref_price, f, k, r, t, flag)
+    ref_iv = _pvol_black_iv(ref_price, f, k, r, t, flag)
+    assert pv_iv == pytest.approx(ref_iv, abs=IV_TOL)

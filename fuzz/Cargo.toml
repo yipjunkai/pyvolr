@@ -32,3 +32,10 @@ path = "fuzz_targets/iv_solve.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "black76_price"
+path = "fuzz_targets/black76_price.rs"
+test = false
+doc = false
+bench = false

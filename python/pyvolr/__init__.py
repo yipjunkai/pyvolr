@@ -16,6 +16,7 @@ For a drop-in py_vollib replacement, use the compatibility shim:
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
+from pyvolr import black76 as black76
 from pyvolr import bs as bs
 
 try:
@@ -23,4 +24,4 @@ try:
 except PackageNotFoundError:
     __version__ = "0.0.0+local"
 
-__all__ = ["__version__", "bs"]
+__all__ = ["__version__", "black76", "bs"]

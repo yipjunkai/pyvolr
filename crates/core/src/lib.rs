@@ -6,6 +6,7 @@
 
 // Modules are pub so the pyvolr-fuzz workspace (fuzz/) can drive them
 // directly. The PyO3 surface below is the only consumer in normal builds.
+pub mod black76;
 pub mod bsm;
 pub mod greeks;
 pub mod iv;
@@ -112,6 +113,107 @@ define_price_or_greek!(bsm_rho, greeks::rho, with_flag);
 define_price_or_greek!(bsm_gamma, greeks::gamma, no_flag);
 define_price_or_greek!(bsm_vega, greeks::vega, no_flag);
 
+// Black-76 has no `q` parameter (forward, not spot). Otherwise identical
+// macro shape to the BSM bindings above.
+macro_rules! define_black76 {
+    ($pyname:ident, $rustfn:path, with_flag) => {
+        #[pyfunction]
+        #[allow(clippy::too_many_arguments)]
+        fn $pyname<'py>(
+            py: Python<'py>,
+            flag: PyReadonlyArray1<'py, i8>,
+            f: PyReadonlyArray1<'py, f64>,
+            k: PyReadonlyArray1<'py, f64>,
+            t: PyReadonlyArray1<'py, f64>,
+            r: PyReadonlyArray1<'py, f64>,
+            sigma: PyReadonlyArray1<'py, f64>,
+        ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+            let flag = flag.as_slice()?;
+            let f = f.as_slice()?;
+            let k = k.as_slice()?;
+            let t = t.as_slice()?;
+            let r = r.as_slice()?;
+            let sigma = sigma.as_slice()?;
+            let n = check_len(&[flag.len(), f.len(), k.len(), t.len(), r.len(), sigma.len()])?;
+            let out: Vec<f64> = (0..n)
+                .map(|i| $rustfn(Flag::from_i8(flag[i]), f[i], k[i], t[i], r[i], sigma[i]))
+                .collect();
+            Ok(out.into_pyarray(py))
+        }
+    };
+    ($pyname:ident, $rustfn:path, no_flag) => {
+        #[pyfunction]
+        fn $pyname<'py>(
+            py: Python<'py>,
+            f: PyReadonlyArray1<'py, f64>,
+            k: PyReadonlyArray1<'py, f64>,
+            t: PyReadonlyArray1<'py, f64>,
+            r: PyReadonlyArray1<'py, f64>,
+            sigma: PyReadonlyArray1<'py, f64>,
+        ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+            let f = f.as_slice()?;
+            let k = k.as_slice()?;
+            let t = t.as_slice()?;
+            let r = r.as_slice()?;
+            let sigma = sigma.as_slice()?;
+            let n = check_len(&[f.len(), k.len(), t.len(), r.len(), sigma.len()])?;
+            let out: Vec<f64> = (0..n)
+                .map(|i| $rustfn(f[i], k[i], t[i], r[i], sigma[i]))
+                .collect();
+            Ok(out.into_pyarray(py))
+        }
+    };
+}
+
+define_black76!(black76_price, black76::price, with_flag);
+define_black76!(black76_delta, black76::delta, with_flag);
+define_black76!(black76_theta, black76::theta, with_flag);
+define_black76!(black76_rho, black76::rho, with_flag);
+define_black76!(black76_gamma, black76::gamma, no_flag);
+define_black76!(black76_vega, black76::vega, no_flag);
+
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn black76_iv<'py>(
+    py: Python<'py>,
+    target_price: PyReadonlyArray1<'py, f64>,
+    flag: PyReadonlyArray1<'py, i8>,
+    f: PyReadonlyArray1<'py, f64>,
+    k: PyReadonlyArray1<'py, f64>,
+    t: PyReadonlyArray1<'py, f64>,
+    r: PyReadonlyArray1<'py, f64>,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    let target_price = target_price.as_slice()?;
+    let flag = flag.as_slice()?;
+    let f = f.as_slice()?;
+    let k = k.as_slice()?;
+    let t = t.as_slice()?;
+    let r = r.as_slice()?;
+    let n = check_len(&[
+        target_price.len(),
+        flag.len(),
+        f.len(),
+        k.len(),
+        t.len(),
+        r.len(),
+    ])?;
+    // Black-76 IV: reuse the BSM solver with q = r (the Black-76 specialization).
+    let out: Vec<f64> = (0..n)
+        .map(|i| {
+            iv::solve(
+                target_price[i],
+                Flag::from_i8(flag[i]),
+                f[i],
+                k[i],
+                t[i],
+                r[i],
+                r[i],
+            )
+        })
+        .collect();
+    Ok(out.into_pyarray(py))
+}
+
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 fn bsm_iv<'py>(
@@ -170,5 +272,12 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bsm_theta, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_rho, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_iv, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_price, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_delta, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_gamma, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_vega, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_theta, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_rho, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_iv, m)?)?;
     Ok(())
 }

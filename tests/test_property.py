@@ -1,4 +1,4 @@
-"""Hypothesis property tests covering BSM invariants.
+"""Hypothesis property tests covering BSM and Black-76 invariants.
 
 These tests describe what _must_ hold for any inputs in a sensible range,
 not specific values. They are the cheapest insurance against regressions.
@@ -13,7 +13,7 @@ import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
-from pyvolr import bs
+from pyvolr import black76, bs
 
 # Range that excludes pathological extremes while still stress-testing the math.
 spot = st.floats(min_value=0.5, max_value=10_000.0, allow_nan=False, allow_infinity=False)
@@ -138,5 +138,92 @@ class TestIvRoundtrip:
         v = bs.vega(S=s, K=k, T=t, r=r, sigma=sigma, q=q)
         assume(v > 1e-4 * max(1.0, s))  # filter ill-conditioned tails
         iv = bs.implied_vol(p, fl, S=s, K=k, T=t, r=r, q=q)
+        assume(not np.isnan(iv))
+        assert iv == pytest.approx(sigma, abs=1e-6)
+
+
+# Black-76 uses forward F instead of spot S; same parameter ranges otherwise.
+forward = spot
+
+
+@pytest.mark.property
+class TestBlack76Parity:
+    @given(forward, strike, ttm, rate, vol)
+    def test_put_call_parity(self, f: float, k: float, t: float, r: float, sigma: float) -> None:
+        # C - P = exp(-r*T) * (F - K)
+        c = black76.price("c", F=f, K=k, T=t, r=r, sigma=sigma)
+        p = black76.price("p", F=f, K=k, T=t, r=r, sigma=sigma)
+        lhs = c - p
+        rhs = math.exp(-r * t) * (f - k)
+        atol = 1e-8 * max(1.0, abs(f) + abs(k))
+        assert math.isclose(lhs, rhs, abs_tol=atol)
+
+
+@pytest.mark.property
+class TestBlack76Monotonicity:
+    @given(forward, strike, ttm, rate, vol)
+    def test_call_increasing_in_forward(
+        self, f: float, k: float, t: float, r: float, sigma: float
+    ) -> None:
+        p1 = black76.price("c", F=f, K=k, T=t, r=r, sigma=sigma)
+        p2 = black76.price("c", F=f * 1.05, K=k, T=t, r=r, sigma=sigma)
+        assert p2 >= p1 - 1e-12
+
+    @given(forward, strike, ttm, rate, vol)
+    def test_call_decreasing_in_strike(
+        self, f: float, k: float, t: float, r: float, sigma: float
+    ) -> None:
+        p1 = black76.price("c", F=f, K=k, T=t, r=r, sigma=sigma)
+        p2 = black76.price("c", F=f, K=k * 1.05, T=t, r=r, sigma=sigma)
+        assert p2 <= p1 + 1e-12
+
+    @given(forward, strike, ttm, rate, vol, flag)
+    def test_price_increasing_in_vol(
+        self, f: float, k: float, t: float, r: float, sigma: float, fl: str
+    ) -> None:
+        assume(sigma < 1.9)
+        p1 = black76.price(fl, F=f, K=k, T=t, r=r, sigma=sigma)
+        p2 = black76.price(fl, F=f, K=k, T=t, r=r, sigma=sigma + 0.05)
+        assert p2 >= p1 - 1e-10
+
+
+@pytest.mark.property
+class TestBlack76NonNegative:
+    @given(forward, strike, ttm, rate, vol, flag)
+    def test_price_nonneg(
+        self, f: float, k: float, t: float, r: float, sigma: float, fl: str
+    ) -> None:
+        p = black76.price(fl, F=f, K=k, T=t, r=r, sigma=sigma)
+        assert p >= -1e-12
+
+    @given(forward, strike, ttm, rate, vol)
+    def test_gamma_nonneg(self, f: float, k: float, t: float, r: float, sigma: float) -> None:
+        g = black76.gamma(F=f, K=k, T=t, r=r, sigma=sigma)
+        assert g >= -1e-12
+
+    @given(forward, strike, ttm, rate, vol)
+    def test_vega_nonneg(self, f: float, k: float, t: float, r: float, sigma: float) -> None:
+        v = black76.vega(F=f, K=k, T=t, r=r, sigma=sigma)
+        assert v >= -1e-12
+
+
+@pytest.mark.property
+class TestBlack76IvRoundtrip:
+    @given(
+        forward,
+        st.floats(min_value=0.5, max_value=2.0, allow_nan=False),  # K/F ratio
+        st.floats(min_value=0.1, max_value=5.0, allow_nan=False),
+        rate,
+        st.floats(min_value=0.1, max_value=1.0, allow_nan=False),
+        flag,
+    )
+    def test_iv_recovers_sigma_when_well_conditioned(
+        self, f: float, k_ratio: float, t: float, r: float, sigma: float, fl: str
+    ) -> None:
+        k = f * k_ratio
+        p = black76.price(fl, F=f, K=k, T=t, r=r, sigma=sigma)
+        v = black76.vega(F=f, K=k, T=t, r=r, sigma=sigma)
+        assume(v > 1e-4 * max(1.0, f))
+        iv = black76.implied_vol(p, fl, F=f, K=k, T=t, r=r)
         assume(not np.isnan(iv))
         assert iv == pytest.approx(sigma, abs=1e-6)

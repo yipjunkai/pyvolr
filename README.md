@@ -22,17 +22,20 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
   <img alt="BSM call pricing throughput: pyvolr vs py_vollib, log-log scaling by array size" src="docs/assets/perf-light.svg">
 </picture>
 
-| Scenario                  |   pyvolr | py_vollib | speedup |
-| ------------------------- | -------: | --------: | ------: |
-| `price`, scalar           |   4.0 µs |    2.0 µs |    0.5× |
-| `price`, 1k strikes       |  25.4 µs |   2.16 ms |     85× |
-| `price`, 10k strikes      |   157 µs |  21.73 ms |    139× |
-| `price`, 100k strikes     |  1.48 ms | 217.53 ms |    147× |
-| `price`, 1M strikes       | 15.18 ms |  2,204 ms |    145× |
-| all 5 Greeks, 10k strikes |   593 µs |  85.82 ms |    145× |
-| `implied_vol`, scalar     |   3.9 µs |   13.9 µs |    3.6× |
+| Scenario                      |   pyvolr | py_vollib | speedup |
+| ----------------------------- | -------: | --------: | ------: |
+| `bs.price`, scalar            |   4.0 µs |    2.0 µs |    0.5× |
+| `bs.price`, 1k strikes        |  25.4 µs |   2.16 ms |     85× |
+| `bs.price`, 10k strikes       |   157 µs |  21.73 ms |    139× |
+| `bs.price`, 100k strikes      |  1.48 ms | 217.53 ms |    147× |
+| `bs.price`, 1M strikes        | 15.18 ms |  2,204 ms |    145× |
+| `bs.greeks` (all 5), 10k      |   593 µs |  85.82 ms |    145× |
+| `bs.implied_vol`, scalar      |   3.9 µs |   13.9 µs |    3.6× |
+| `black76.price`, scalar       |   3.8 µs |    2.2 µs |    0.6× |
+| `black76.price`, 10k strikes  |   171 µs |  23.45 ms |    137× |
+| `black76.implied_vol`, scalar |   3.9 µs |   15.0 µs |    3.9× |
 
-Vectorize anything you can — that's where pyvolr wins. For a single scalar `price` call, py_vollib's pure-Python path edges out pyvolr because the PyO3 FFI roundtrip + numpy broadcasting setup costs a few microseconds; even a 2-element array call already favors pyvolr.
+Vectorize anything you can — that's where pyvolr wins. For a single scalar `price` call, py_vollib's pure-Python path edges out pyvolr because the PyO3 FFI roundtrip + numpy broadcasting setup costs a few microseconds; even a 2-element array call already favors pyvolr. Black-76's profile tracks BSM's exactly because the Rust core delegates to `bsm::price` with `q=r` rather than duplicating math.
 
 Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.0 vs py_vollib 1.0.1.
 
@@ -95,15 +98,20 @@ strike_grid = np.linspace(80, 120, 5).reshape(-1, 1)
 vol_grid = np.linspace(0.10, 0.40, 4).reshape(1, -1)
 surface = bs.price("c", S=100, K=strike_grid, T=0.5, r=0.05, sigma=vol_grid)
 # shape (5, 4)
+
+# Black-76 for options on futures / forwards — same API, F replaces S, no q.
+from pyvolr import black76
+black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 ```
 
 ## ✨ Features
 
 - **Black-Scholes-Merton pricing** — calls and puts with continuous dividend yield
+- **Black-76 pricing** — European options on futures/forwards (`pyvolr.black76`), same vectorized API as `bs`
 - **Analytical Greeks** — delta, gamma, theta, vega, rho (with documented sign and unit conventions)
 - **Robust implied volatility** — Newton-Raphson seeded by Manaster-Koehler, bisection fallback for OTM tails and tiny-vega regimes
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
-- **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree for one-import-line migration
+- **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree (including `py_vollib.black`) for one-import-line migration
 - **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
 - **Free-threaded Python ready** — dedicated wheels for 3.13t and 3.14t; the Rust core releases the GIL around the math, so pricing scales across threads without a process pool
 - **Typed end-to-end** — pyright-strict library code, full type stubs for the Rust extension
@@ -111,7 +119,6 @@ surface = bs.price("c", S=100, K=strike_grid, T=0.5, r=0.05, sigma=vol_grid)
 ## 🗺️ Coming soon
 
 - [ ] Jäckel "Let's Be Rational" implied volatility (2-iteration convergence)
-- [ ] Black-76 (futures options)
 - [ ] Bachelier (normal model, for negative rates)
 - [ ] Higher-order Greeks (vanna, vomma, charm, speed, zomma, color)
 - [ ] SIMD batch evaluation + `rayon` parallelism for large arrays
@@ -127,11 +134,13 @@ Replace your imports — the signatures and `'c'`/`'p'` flag convention are pres
 from py_vollib.black_scholes import black_scholes
 from py_vollib.black_scholes.greeks.analytical import delta
 from py_vollib.black_scholes.implied_volatility import implied_volatility
+from py_vollib.black import black  # futures options
 
 # After
 from pyvolr.compat.py_vollib.black_scholes import black_scholes
 from pyvolr.compat.py_vollib.black_scholes.greeks.analytical import delta
 from pyvolr.compat.py_vollib.black_scholes.implied_volatility import implied_volatility
+from pyvolr.compat.py_vollib.black import black  # futures options
 ```
 
 The compat shim also preserves py*vollib's \_unit conventions*: vega is per-1% vol, theta is per-day, rho is per-1% rate, and `implied_volatility` takes `flag` as its last argument. For new code, prefer the modern `pyvolr.bs` API — it accepts numpy arrays, broadcasts naturally, uses per-unit conventions consistently, and returns all Greeks in a single call.
@@ -150,11 +159,13 @@ pyvolr/
 │   └── src/
 │       ├── lib.rs           # PyO3 bindings (flat-array entry points)
 │       ├── bsm.rs           # BSM pricing, d1/d2, forward price
+│       ├── black76.rs       # Black-76 (futures options) — delegates to BSM with q=r
 │       ├── greeks.rs        # Delta, gamma, theta, vega, rho
 │       ├── iv.rs            # Newton + Manaster-Koehler + bisection IV solver
 │       └── normal.rs        # erf-based standard normal CDF / PDF
 ├── python/pyvolr/
-│   ├── bs.py                # Public API (numpy-broadcast wrappers)
+│   ├── bs.py                # BSM public API (numpy-broadcast wrappers)
+│   ├── black76.py           # Black-76 public API
 │   ├── _core.pyi            # Type stubs for the Rust extension
 │   └── compat/py_vollib/    # Drop-in shim mirroring py_vollib's tree
 ├── tests/                   # pytest + hypothesis property tests
@@ -175,6 +186,10 @@ pyvolr/
 | `bs.rho(flag, S, K, T, r, sigma, q=0)`         | ∂Price/∂r (per unit r)     | all numeric inputs     |
 | `bs.greeks(flag, S, K, T, r, sigma, q=0)`      | `dict` of all five Greeks  | all numeric inputs     |
 | `bs.implied_vol(price, flag, S, K, T, r, q=0)` | σ (NaN on bound violation) | price + numeric inputs |
+| `black76.price(flag, F, K, T, r, sigma)`       | option price on a forward  | all numeric inputs     |
+| `black76.{delta,gamma,vega,theta,rho}(...)`    | Greeks for Black-76        | all numeric inputs     |
+| `black76.greeks(flag, F, K, T, r, sigma)`      | `dict` of all five Greeks  | all numeric inputs     |
+| `black76.implied_vol(price, flag, F, K, T, r)` | σ (NaN on bound violation) | price + numeric inputs |
 | `pyvolr.compat.py_vollib.…`                    | py_vollib-shaped scalars   | n/a (scalar API)       |
 
 `flag` accepts `'c'`/`'C'` (call), `'p'`/`'P'` (put), or an array thereof.
@@ -193,7 +208,7 @@ Commercial sponsorship channels will be added if demand warrants. For now the be
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Particularly welcome: new pricing models (Black-76, Bachelier, American), higher-order Greeks, SIMD/vectorization work, and property tests for edge cases.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Particularly welcome: new pricing models (Bachelier, American), higher-order Greeks, SIMD/vectorization work, and property tests for edge cases.
 
 ## 📄 License
 

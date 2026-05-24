@@ -3,7 +3,7 @@
 ## Supported versions
 
 | Version | Supported |
-|---------|-----------|
+| ------- | --------- |
 | 0.1.x   | yes       |
 
 Until pyvolr reaches 1.0, only the latest minor version receives security fixes.
@@ -14,7 +14,7 @@ Until pyvolr reaches 1.0, only the latest minor version receives security fixes.
 
 Use GitHub's private security advisory mechanism:
 
-1. Go to https://github.com/yipjunkai/pyvolr/security/advisories
+1. Go to <https://github.com/yipjunkai/pyvolr/security/advisories>
 2. Click "Report a vulnerability"
 3. Fill in the form with as much detail as you can share
 

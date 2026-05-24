@@ -44,7 +44,7 @@ _FlagInput = ArrayLike | str
 _Result = float | NDArray[np.float64]
 
 
-def _normalize_flag(flag: _FlagInput, shape: tuple[int, ...]) -> NDArray[np.int8]:
+def normalize_flag(flag: _FlagInput, shape: tuple[int, ...]) -> NDArray[np.int8]:
     """Convert a flag input into an int8 array of the given broadcast shape.
 
     Accepts:
@@ -69,7 +69,7 @@ def _normalize_flag(flag: _FlagInput, shape: tuple[int, ...]) -> NDArray[np.int8
     return np.ascontiguousarray(np.broadcast_to(arr.astype(np.int8), shape))
 
 
-def _broadcast_f64(*arrs: ArrayLike) -> tuple[list[NDArray[np.float64]], tuple[int, ...]]:
+def broadcast_f64(*arrs: ArrayLike) -> tuple[list[NDArray[np.float64]], tuple[int, ...]]:
     """Broadcast inputs to a common shape; return flat contiguous f64 arrays."""
     cast = [np.asarray(a, dtype=np.float64) for a in arrs]
     bcast = np.broadcast_arrays(*cast)
@@ -78,7 +78,7 @@ def _broadcast_f64(*arrs: ArrayLike) -> tuple[list[NDArray[np.float64]], tuple[i
     return flat, shape
 
 
-def _scalar_or_array(arr: NDArray[np.float64], shape: tuple[int, ...]) -> _Result:
+def scalar_or_array(arr: NDArray[np.float64], shape: tuple[int, ...]) -> _Result:
     """If the broadcast shape is () return a Python scalar; otherwise reshape."""
     if shape == ():
         return float(arr[0])
@@ -95,10 +95,10 @@ def price(
     q: ArrayLike = 0.0,
 ) -> _Result:
     """European Black-Scholes-Merton option price."""
-    flat, shape = _broadcast_f64(S, K, T, r, q, sigma)
-    flag_arr = _normalize_flag(flag, shape).ravel()
+    flat, shape = broadcast_f64(S, K, T, r, q, sigma)
+    flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.bsm_price(flag_arr, *flat)
-    return _scalar_or_array(out, shape)
+    return scalar_or_array(out, shape)
 
 
 def delta(
@@ -111,10 +111,10 @@ def delta(
     q: ArrayLike = 0.0,
 ) -> _Result:
     """First derivative of price with respect to spot."""
-    flat, shape = _broadcast_f64(S, K, T, r, q, sigma)
-    flag_arr = _normalize_flag(flag, shape).ravel()
+    flat, shape = broadcast_f64(S, K, T, r, q, sigma)
+    flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.bsm_delta(flag_arr, *flat)
-    return _scalar_or_array(out, shape)
+    return scalar_or_array(out, shape)
 
 
 def gamma(
@@ -126,9 +126,9 @@ def gamma(
     q: ArrayLike = 0.0,
 ) -> _Result:
     """Second derivative of price with respect to spot. Independent of call/put."""
-    flat, shape = _broadcast_f64(S, K, T, r, q, sigma)
+    flat, shape = broadcast_f64(S, K, T, r, q, sigma)
     out = _core.bsm_gamma(*flat)
-    return _scalar_or_array(out, shape)
+    return scalar_or_array(out, shape)
 
 
 def vega(
@@ -140,9 +140,9 @@ def vega(
     q: ArrayLike = 0.0,
 ) -> _Result:
     """Derivative of price with respect to volatility (per unit vol)."""
-    flat, shape = _broadcast_f64(S, K, T, r, q, sigma)
+    flat, shape = broadcast_f64(S, K, T, r, q, sigma)
     out = _core.bsm_vega(*flat)
-    return _scalar_or_array(out, shape)
+    return scalar_or_array(out, shape)
 
 
 def theta(
@@ -155,10 +155,10 @@ def theta(
     q: ArrayLike = 0.0,
 ) -> _Result:
     """Derivative of price with respect to time-to-expiry (per year, annualized)."""
-    flat, shape = _broadcast_f64(S, K, T, r, q, sigma)
-    flag_arr = _normalize_flag(flag, shape).ravel()
+    flat, shape = broadcast_f64(S, K, T, r, q, sigma)
+    flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.bsm_theta(flag_arr, *flat)
-    return _scalar_or_array(out, shape)
+    return scalar_or_array(out, shape)
 
 
 def rho(
@@ -171,10 +171,10 @@ def rho(
     q: ArrayLike = 0.0,
 ) -> _Result:
     """Derivative of price with respect to the risk-free rate (per unit r)."""
-    flat, shape = _broadcast_f64(S, K, T, r, q, sigma)
-    flag_arr = _normalize_flag(flag, shape).ravel()
+    flat, shape = broadcast_f64(S, K, T, r, q, sigma)
+    flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.bsm_rho(flag_arr, *flat)
-    return _scalar_or_array(out, shape)
+    return scalar_or_array(out, shape)
 
 
 def implied_vol(
@@ -193,11 +193,11 @@ def implied_vol(
       - `T <= 0`,
       - the solver cannot bracket a root within `[1e-9, 5.0]`.
     """
-    flat, shape = _broadcast_f64(price, S, K, T, r, q)
-    flag_arr = _normalize_flag(flag, shape).ravel()
+    flat, shape = broadcast_f64(price, S, K, T, r, q)
+    flag_arr = normalize_flag(flag, shape).ravel()
     p_arr, s_arr, k_arr, t_arr, r_arr, q_arr = flat
     out = _core.bsm_iv(p_arr, flag_arr, s_arr, k_arr, t_arr, r_arr, q_arr)
-    return _scalar_or_array(out, shape)
+    return scalar_or_array(out, shape)
 
 
 def greeks(
