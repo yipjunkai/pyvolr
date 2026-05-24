@@ -13,7 +13,7 @@ jobs:
   stale:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v10
+      - uses: actions/stale@eb5cf3af3ac0a1aa4c9c45633dd1ae542a27a899 # v10
         with:
           # IMPORTANT: bug reports are explicitly excluded from auto-staling.
           # Quietly closing real bugs is the failure mode that makes finance
