@@ -6,7 +6,8 @@ build-backend = "maturin"
 name = "pyvolr"
 description = "Modern Black-Scholes-Merton pricing, Greeks, and implied volatility for Python. Rust core. Drop-in py_vollib replacement."
 readme = "README.md"
-license = { text = "MIT OR Apache-2.0" }
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
 requires-python = ">=3.10"
 authors = [{ name = "pyvolr contributors" }]
 keywords = [
