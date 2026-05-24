@@ -13,7 +13,7 @@ The following commitments aim to keep the project bootstrappable even if the cur
 1. **All build and release infrastructure is in-repo**: every workflow, every config, every secret is in `.github/`. There is no out-of-band CI server. Anyone with repo access (or a fork) can ship a release.
 2. **Releases are automated**: `release-please` opens release PRs from conventional commits. Merging a release PR triggers wheel builds and PyPI publication via Trusted Publishing. No human credentials are stored.
 3. **No proprietary algorithms**: every numerical method is implemented from a public reference (paper, textbook). References are cited in source comments. Anyone can audit, fork, or replace.
-4. **Documentation builds from source**: the docs site lives in `docs/`, builds with `mkdocs`, and is hosted on GitHub Pages. No external CMS.
+4. **Documentation lives with the code**: long-form rationale is in `docs/` (markdown); the README is the primary entry point. No external CMS or hosted docs site to maintain.
 
 ## Becoming a co-maintainer
 

@@ -1,0 +1,6 @@
+[toolchain]
+# cargo-fuzz requires nightly for -Zsanitizer=address and other unstable flags.
+# This file shadows the workspace-root rust-toolchain.toml (which pins stable
+# for everything else) only within fuzz/.
+channel = "nightly"
+profile = "minimal"

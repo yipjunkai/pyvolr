@@ -3,6 +3,17 @@ name: release-please
 # Maintains a permanent "Release v0.X.Y" PR with auto-generated changelog
 # from conventional commits. Merging the PR creates the version tag, which
 # fires release.yml. Releases become a one-click operation.
+#
+# Heads-up: GitHub suppresses workflow runs on commits authored by the default
+# GITHUB_TOKEN to prevent infinite loops, so release-please PRs do NOT get a
+# CI run automatically. Before merging the release PR, kick CI manually:
+#
+#     gh workflow run ci -r release-please--branches--main--components--pyvolr-core
+#     # then check it:
+#     gh run watch
+#
+# (To remove this gap entirely, swap the GITHUB_TOKEN for a fine-scoped PAT
+# stored as RELEASE_PLEASE_TOKEN and pass it to the action's `token:` input.)
 
 on:
   push:

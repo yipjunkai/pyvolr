@@ -44,19 +44,12 @@ dynamic = ["version"]
 [project.urls]
 Homepage = "https://github.com/yipjunkai/pyvolr"
 Repository = "https://github.com/yipjunkai/pyvolr"
-Documentation = "https://yipjunkai.github.io/pyvolr/"
 Issues = "https://github.com/yipjunkai/pyvolr/issues"
 Changelog = "https://github.com/yipjunkai/pyvolr/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 test = ["pytest>=9.0", "pytest-benchmark>=5.0", "hypothesis>=6.150"]
 dev = ["maturin>=1.13", "ruff>=0.15", "pyright>=1.1.400", "pre-commit>=4.0"]
-docs = [
-  "mkdocs>=1.6",
-  "mkdocs-material>=9.5",
-  "mkdocstrings[python]>=0.26",
-  "mike>=2.1",
-]
 
 [tool.maturin]
 module-name = "pyvolr._core"

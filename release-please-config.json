@@ -1,9 +1,19 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "rust",
   "packages": {
+    ".": {
+      "package-name": "pyvolr",
+      "release-type": "simple",
+      "changelog-path": "CHANGELOG.md",
+      "skip-github-release": true,
+      "draft": false,
+      "prerelease": false,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
     "crates/core": {
       "package-name": "pyvolr-core",
+      "release-type": "rust",
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
       "draft": false,
@@ -12,6 +22,14 @@
       "bump-patch-for-minor-pre-major": true
     }
   },
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "pyvolr",
+      "components": ["pyvolr", "pyvolr-core"],
+      "merge": true
+    }
+  ],
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },
