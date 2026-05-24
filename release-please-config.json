@@ -2,8 +2,8 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "rust",
   "packages": {
-    ".": {
-      "package-name": "pyvolr",
+    "crates/core": {
+      "package-name": "pyvolr-core",
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
       "draft": false,

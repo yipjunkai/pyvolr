@@ -15,6 +15,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
 # Minimum permissions per OSSF Scorecard recommendation; per-job elevations below.
 permissions: read-all
 

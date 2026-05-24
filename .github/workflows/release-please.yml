@@ -9,6 +9,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Never cancel an in-flight release PR generation -- two concurrent runs
+# would corrupt the manifest.
+concurrency:
+  group: release-please
+
 permissions:
   contents: write
   pull-requests: write

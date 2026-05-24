@@ -29,13 +29,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0  # mike needs full history
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           python-version: "3.12"
-      - uses: astral-sh/setup-uv@v8.1.0
       - name: Install docs deps
         run: |
-          uv pip install --system mkdocs mkdocs-material 'mkdocstrings[python]' mike
+          uv pip install mkdocs mkdocs-material 'mkdocstrings[python]' mike
       - name: Build docs (skipped if no mkdocs.yml yet)
         run: |
           if [ -f mkdocs.yml ]; then
