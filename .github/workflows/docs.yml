@@ -34,7 +34,7 @@ jobs:
           python-version: "3.12"
       - name: Install docs deps
         run: |
-          uv pip install --system mkdocs mkdocs-material 'mkdocstrings[python]' mike
+          uv pip install --system --break-system-packages mkdocs mkdocs-material 'mkdocstrings[python]' mike
       - name: Build docs (skipped if no mkdocs.yml yet)
         run: |
           if [ -f mkdocs.yml ]; then

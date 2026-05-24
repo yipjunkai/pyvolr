@@ -42,7 +42,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Python lint tools
-        run: uv pip install --system 'ruff>=0.15' 'pyright>=1.1.400'
+        run: uv pip install --system --break-system-packages 'ruff>=0.15' 'pyright>=1.1.400'
       - name: cargo fmt
         run: cargo fmt --all --check
       - name: cargo clippy
@@ -106,7 +106,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Build extension and install with test deps
         run: |
-          uv pip install --system maturin pytest pytest-benchmark hypothesis numpy
+          uv pip install --system --break-system-packages maturin pytest pytest-benchmark hypothesis numpy
           maturin develop --release
       - name: Run pytest
         run: pytest -ra
@@ -123,7 +123,7 @@ jobs:
           python-version: "3.12"
       - name: Build and install
         run: |
-          uv pip install --system maturin pytest hypothesis numpy
+          uv pip install --system --break-system-packages maturin pytest hypothesis numpy
           maturin develop --release
       - name: Hypothesis thorough profile
         run: pytest -m property --hypothesis-profile=thorough
