@@ -41,10 +41,10 @@ jobs:
       - uses: astral-sh/setup-uv@v8.1.0
         with:
           python-version: "3.12"
-      - name: Install Python lint tools
+      - name: Install Python lint tools (incl. project + test deps so pyright resolves all imports)
         run: |
           uv venv
-          uv pip install 'ruff>=0.15' 'pyright>=1.1.400'
+          uv pip install 'ruff>=0.15' 'pyright>=1.1.400' pytest hypothesis numpy
       - name: cargo fmt
         run: cargo fmt --all --check
       - name: cargo clippy
