@@ -54,7 +54,19 @@ fuzz_target!(|inp: Input| {
         && inp.sigma >= 0.0
         && (inp.r * inp.t).abs() < 700.0
         && (inp.q * inp.t).abs() < 700.0
-        && inp.sigma * inp.t.sqrt() < 100.0;
+        && inp.sigma * inp.t.sqrt() < 100.0
+        // Absolute bounds on individual parameters: the constraints above
+        // bound *products* (r*t, sigma*sqrt(t)), but the BSM formula also
+        // computes intermediates like `0.5 * sigma * sigma` (overflows to
+        // +inf for sigma > ~1.34e154) and `r - q` (overflows when both are
+        // near f64::MAX with opposite signs). Once any of these go to ±inf,
+        // both d1 and d2 collapse to +inf instead of taking opposite signs,
+        // and the formula degenerates to `s - k * disc_r` — wildly negative
+        // for k >> s. 1e150 keeps every intermediate finite while still
+        // leaving the fuzzer 150 orders of magnitude past anything real.
+        && inp.r.abs() < 1e150
+        && inp.q.abs() < 1e150
+        && inp.sigma < 1e150;
 
     if well_conditioned {
         assert!(p.is_finite() || p.is_nan(), "non-finite, non-nan: p={p}");
