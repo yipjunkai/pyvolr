@@ -23,17 +23,17 @@ jobs:
     name: build sdist
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v8
       - name: Build sdist
         run: |
           uv pip install --system maturin
           maturin sdist --out dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: dist/*.tar.gz
@@ -52,8 +52,8 @@ jobs:
           - { runner: macos-14,        target: aarch64,       cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
           - { runner: windows-latest,  target: x86_64,        cibw: cp310-* cp311-* cp312-* cp313-* cp314-* }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
@@ -61,12 +61,12 @@ jobs:
         uses: pypa/cibuildwheel@v2.21
         env:
           CIBW_BUILD: ${{ matrix.platform.cibw }}
-          CIBW_SKIP: "pp* *-musllinux*"
+          CIBW_SKIP: "pp*"
           CIBW_BUILD_FRONTEND: "build"
           CIBW_BEFORE_BUILD: "pip install maturin"
           CIBW_TEST_REQUIRES: "pytest hypothesis numpy"
           CIBW_TEST_COMMAND: "pytest {project}/tests -ra"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.platform.runner }}-${{ matrix.platform.target }}
           path: wheelhouse/*.whl
@@ -83,7 +83,7 @@ jobs:
     permissions:
       id-token: write  # Required for Trusted Publishing (OIDC).
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -101,7 +101,7 @@ jobs:
     environment:
       name: crates-io
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - name: Publish crate
         env:
@@ -119,12 +119,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: dist/*

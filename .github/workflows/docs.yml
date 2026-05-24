@@ -26,13 +26,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0  # mike needs full history
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v8
       - name: Install docs deps
         run: |
           uv pip install --system mkdocs mkdocs-material 'mkdocstrings[python]' mike
@@ -44,8 +44,8 @@ jobs:
             echo "::notice::mkdocs.yml not present yet; docs build skipped."
             mkdir -p site && echo "<h1>pyvolr docs coming soon</h1>" > site/index.html
           fi
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
