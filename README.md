@@ -1,45 +1,35 @@
 # pyvolr
 
 [![PyPI](https://img.shields.io/pypi/v/pyvolr.svg)](https://pypi.org/project/pyvolr/)
-[![CI](https://github.com/yipjunkai/pyvolr/actions/workflows/ci.yml/badge.svg)](https://github.com/yipjunkai/pyvolr/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/pyvolr.svg)](https://pypi.org/project/pyvolr/)
+[![Wheel](https://img.shields.io/pypi/wheel/pyvolr.svg)](https://pypi.org/project/pyvolr/#files)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/yipjunkai/pyvolr/badge)](https://securityscorecards.dev/viewer/?uri=github.com/yipjunkai/pyvolr)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#-license)
-[![Python: 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://pypi.org/project/pyvolr/)
+[![CI](https://github.com/yipjunkai/pyvolr/actions/workflows/ci.yml/badge.svg)](https://github.com/yipjunkai/pyvolr/actions/workflows/ci.yml)
+[![License](https://img.shields.io/pypi/l/pyvolr.svg)](#-license)
 
 **Modern Black-Scholes-Merton pricing, Greeks, and implied volatility for Python.** Rust core. Vectorized. Drop-in replacement for the abandoned `py_vollib`.
 
 ```python
 from pyvolr import bs
 
-bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2)
-# 4.581680167540007
+bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
 ```
 
-## ⚙️ How it works
+## ⚡ Performance
 
-```text
-Your Python code
-       │
-       ▼
-┌──────────────────┐
-│  pyvolr.bs       │  numpy broadcasting, flag normalization,
-│  (Python)        │  scalar/array dispatch
-└────────┬─────────┘
-         │  flat f64 + i8 numpy arrays
-         ▼
-┌──────────────────┐
-│  pyvolr._core    │  PyO3 bindings, GIL released around the math
-│  (Rust ext)      │
-└────────┬─────────┘
-         │  zero-copy slices via ndarray
-         ▼
-┌──────────────────┐
-│  pyvolr-core     │  BSM pricing, analytical Greeks, IV solver
-│  (Rust crate)    │  pure Rust, libm::erf, no Python dependency
-└──────────────────┘
-```
+| Scenario                  |   pyvolr | py_vollib | speedup |
+| ------------------------- | -------: | --------: | ------: |
+| `price`, scalar           |   4.0 µs |    2.0 µs |    0.5× |
+| `price`, 1k strikes       |  25.4 µs |   2.16 ms |     85× |
+| `price`, 10k strikes      |   157 µs |  21.73 ms |    139× |
+| `price`, 100k strikes     |  1.48 ms | 217.53 ms |    147× |
+| `price`, 1M strikes       | 15.18 ms |  2,204 ms |    145× |
+| all 5 Greeks, 10k strikes |   593 µs |  85.82 ms |    145× |
+| `implied_vol`, scalar     |   3.9 µs |   13.9 µs |    3.6× |
 
-Inputs are broadcast and ravelled in Python, the Rust core operates on flat slices, results are reshaped on return. abi3 wheels mean a single binary works across Python 3.10–3.14 — no compiler required.
+Vectorize anything you can — that's where pyvolr wins. For a single scalar `price` call, py_vollib's pure-Python path edges out pyvolr because the PyO3 FFI roundtrip + numpy broadcasting setup costs a few microseconds; even a 2-element array call already favors pyvolr.
+
+Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.0 vs py_vollib 1.0.1.
 
 ## 📦 Install
 
@@ -139,7 +129,7 @@ from pyvolr.compat.py_vollib.black_scholes.greeks.analytical import delta
 from pyvolr.compat.py_vollib.black_scholes.implied_volatility import implied_volatility
 ```
 
-The compat shim also preserves py_vollib's _unit conventions_: vega is per-1% vol, theta is per-day, rho is per-1% rate, and `implied_volatility` takes `flag` as its last argument. For new code, prefer the modern `pyvolr.bs` API — it accepts numpy arrays, broadcasts naturally, uses per-unit conventions consistently, and returns all Greeks in a single call.
+The compat shim also preserves py*vollib's \_unit conventions*: vega is per-1% vol, theta is per-day, rho is per-1% rate, and `implied_volatility` takes `flag` as its last argument. For new code, prefer the modern `pyvolr.bs` API — it accepts numpy arrays, broadcasts naturally, uses per-unit conventions consistently, and returns all Greeks in a single call.
 
 ## 🤔 Why pyvolr exists
 
