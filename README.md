@@ -17,6 +17,11 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
 
 ## ⚡ Performance
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/perf-dark.svg">
+  <img alt="BSM call pricing throughput: pyvolr vs py_vollib, log-log scaling by array size" src="docs/assets/perf-light.svg">
+</picture>
+
 | Scenario                  |   pyvolr | py_vollib | speedup |
 | ------------------------- | -------: | --------: | ------: |
 | `price`, scalar           |   4.0 µs |    2.0 µs |    0.5× |
