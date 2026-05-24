@@ -1,0 +1,54 @@
+name: scorecard
+
+# OSSF Scorecard publishes a security posture score to securityscorecards.dev.
+# Results are uploaded as SARIF to GitHub Code Scanning, so you can see findings
+# in the repo's Security tab in addition to the public badge.
+#
+# The first run after pushing to GitHub populates the badge URL at
+# https://api.securityscorecards.dev/projects/github.com/yipjunkai/pyvolr/badge.
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: "0 4 * * 1" # weekly Monday 04:00 UTC
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Minimum permissions per OSSF Scorecard recommendation; per-job elevations below.
+permissions: read-all
+
+jobs:
+  analysis:
+    name: scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # upload SARIF to GitHub Code Scanning
+      id-token: write # OIDC token to publish results to OSSF
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publish to securityscorecards.dev so the public badge populates.
+          # Set to false if you only want internal Code Scanning results.
+          publish_results: true
+
+      - name: Upload SARIF to Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+      - name: Upload SARIF as artifact (debug/audit)
+        uses: actions/upload-artifact@v7
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
