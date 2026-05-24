@@ -1,8 +1,20 @@
 //! Fuzz target for `pyvolr_core::bsm::price`.
 //!
-//! Goal: prove no input — including pathological ones (NaN, infinity,
-//! negative time, zero volatility) — can panic the pricer or produce
-//! values outside the no-arbitrage bounds for sensible inputs.
+//! Two-tier contract:
+//!   1. For *every* input the pricer must not panic (reaching the bottom
+//!      of `fuzz_target!` already proves this).
+//!   2. For inputs in a physically realistic band — the values any actual
+//!      options-pricing user would supply — the price must additionally
+//!      be finite, non-negative (up to FP roundoff), and respect put-call
+//!      parity.
+//!
+//! Trying to assert (2) on the full f64 input space is whack-a-mole: BSM
+//! has multiple intermediate products that overflow at different boundaries
+//! of f64 (`sigma^2`, `sigma^2 * t`, `s * exp(-q*t)`, `k * exp(-r*t)`, the
+//! `sigma=0` branch's `s * exp((r-q)*t) * exp(-r*t)`, …). Bounding inputs
+//! to the realistic region — wide enough to subsume any real market but
+//! narrow enough to keep every intermediate in f64's well-defined regime —
+//! is both simpler and a more meaningful statement of correctness.
 
 #![no_main]
 
@@ -25,57 +37,41 @@ fuzz_target!(|inp: Input| {
     let flag = if inp.flag_is_call { Flag::Call } else { Flag::Put };
     let p = price(flag, inp.s, inp.k, inp.t, inp.r, inp.q, inp.sigma);
 
-    // Invariants for well-conditioned inputs.
-    //
-    // We check the three places BSM intermediates can overflow:
-    //   - `sigma * sigma` overflowing alone (sigma > ~1.34e154)
-    //   - `sigma * sigma * t` overflowing via the d1/d2 numerator
-    //   - `s * exp(-q*t)` or `k * exp(-r*t)` overflowing in the price line
-    //
-    // The first two are bounded by capping `sigma` and `sigma * sqrt(t)`.
-    // The last is jointly determined by `s`, `k`, `r*t`, `q*t` (can't be
-    // bounded with single-variable constraints), so we just compute the
-    // products and require them to be finite. Outside this set the only
-    // invariant we still require is "the pricer didn't panic".
-    let s_disc_q = inp.s * (-inp.q * inp.t).exp();
-    let k_disc_r = inp.k * (-inp.r * inp.t).exp();
-
-    let well_conditioned = inp.s.is_finite()
+    // Physically realistic input band. Bounds are 2–4 orders of magnitude
+    // past anything a real options market ever produces, so the fuzzer
+    // still explores meaningful edge cases (deep ITM/OTM, low/high vol,
+    // tiny/long time), while staying inside f64's well-defined regime.
+    let realistic = inp.s.is_finite()
         && inp.k.is_finite()
         && inp.t.is_finite()
         && inp.r.is_finite()
         && inp.q.is_finite()
         && inp.sigma.is_finite()
         && inp.s >= 0.0
+        && inp.s < 1e12        // up to a trillion per share
         && inp.k >= 0.0
+        && inp.k < 1e12
         && inp.t >= 0.0
+        && inp.t < 100.0       // 100 years
+        && inp.r.abs() < 1.0   // ±100% annual rate
+        && inp.q.abs() < 1.0
         && inp.sigma >= 0.0
-        && inp.sigma < 1e150
-        && inp.sigma * inp.t.sqrt() < 100.0
-        && inp.r.abs() < 1e150
-        && inp.q.abs() < 1e150
-        && s_disc_q.is_finite()
-        && k_disc_r.is_finite();
+        && inp.sigma < 5.0;    // 500% vol
 
-    if well_conditioned {
-        assert!(p.is_finite() || p.is_nan(), "non-finite, non-nan: p={p}");
-        // Tolerance is relative to the price scale: for huge s, k (e.g.
-        // 1e175), even f64's ~15-digit precision allows absolute errors of
-        // 1e160. The negative price we're guarding against is real arbitrage
-        // (price << -ULP * scale), not FP roundoff at the working scale.
-        let neg_tol = 1e-12 * (inp.s.abs() + inp.k.abs()).max(1.0);
+    if realistic {
+        assert!(p.is_finite(), "non-finite price for realistic inputs: p={p}");
         assert!(
-            p >= -neg_tol || p.is_nan(),
-            "negative price for well-conditioned inputs: p={p} tol={neg_tol}"
+            p >= -1e-12 * (inp.s.abs() + inp.k.abs()).max(1.0),
+            "negative price for realistic inputs: p={p}"
         );
 
-        // Put-call parity (only meaningful if both legs computable and finite).
+        // Put-call parity.
         let other = match flag {
             Flag::Call => Flag::Put,
             Flag::Put => Flag::Call,
         };
         let p_other = price(other, inp.s, inp.k, inp.t, inp.r, inp.q, inp.sigma);
-        if p.is_finite() && p_other.is_finite() && inp.t > 0.0 {
+        if p_other.is_finite() && inp.t > 0.0 {
             let (c, put) = match flag {
                 Flag::Call => (p, p_other),
                 Flag::Put => (p_other, p),
@@ -85,7 +81,7 @@ fuzz_target!(|inp: Input| {
             let scale = (inp.s.abs() + inp.k.abs()).max(1.0);
             let err = (parity_lhs - parity_rhs).abs();
             assert!(
-                err < 1e-6 * scale || err.is_nan(),
+                err < 1e-6 * scale,
                 "put-call parity violated: lhs={parity_lhs} rhs={parity_rhs} err={err}"
             );
         }
