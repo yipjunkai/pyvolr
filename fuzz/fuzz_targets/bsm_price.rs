@@ -59,7 +59,15 @@ fuzz_target!(|inp: Input| {
 
     if well_conditioned {
         assert!(p.is_finite() || p.is_nan(), "non-finite, non-nan: p={p}");
-        assert!(p >= -1e-12 || p.is_nan(), "negative price for well-conditioned inputs: p={p}");
+        // Tolerance is relative to the price scale: for huge s, k (e.g.
+        // 1e175), even f64's ~15-digit precision allows absolute errors of
+        // 1e160. The negative price we're guarding against is real arbitrage
+        // (price << -ULP * scale), not FP roundoff at the working scale.
+        let neg_tol = 1e-12 * (inp.s.abs() + inp.k.abs()).max(1.0);
+        assert!(
+            p >= -neg_tol || p.is_nan(),
+            "negative price for well-conditioned inputs: p={p} tol={neg_tol}"
+        );
 
         // Put-call parity (only meaningful if both legs computable and finite).
         let other = match flag {
