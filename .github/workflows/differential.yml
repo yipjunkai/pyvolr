@@ -37,9 +37,13 @@ jobs:
         # uv-managed Pythons (and many production Python distributions) don't
         # ship CPython's internal _testcapi module — see docs/why.md. The
         # two-line patch swaps it for sys.float_info, which is where these
-        # values should have been read from in the first place.
+        # values should have been read from in the first place. We locate the
+        # file via filesystem search (NOT by importing the module, which
+        # triggers the very ImportError we are trying to fix).
         run: |
-          CONST=$(uv run python -c "import py_lets_be_rational.constants as c; print(c.__file__)")
+          CONST=$(find .venv -path '*/py_lets_be_rational/constants.py' -print -quit)
+          test -n "$CONST" || { echo "py_lets_be_rational/constants.py not found"; exit 1; }
           sed -i 's|from _testcapi import DBL_MIN, DBL_MAX|from sys import float_info as _fi; DBL_MIN, DBL_MAX = _fi.min, _fi.max|' "$CONST"
+          grep -q "float_info" "$CONST" || { echo "patch did not apply"; exit 1; }
       - name: Run differential tests
         run: uv run pytest -m differential -ra
