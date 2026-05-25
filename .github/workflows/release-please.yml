@@ -4,16 +4,17 @@ name: release-please
 # from conventional commits. Merging the PR creates the version tag, which
 # fires release.yml. Releases become a one-click operation.
 #
-# Heads-up: GitHub suppresses workflow runs on commits authored by the default
-# GITHUB_TOKEN to prevent infinite loops, so release-please PRs do NOT get a
-# CI run automatically. Before merging the release PR, kick CI manually:
+# The release-please action authenticates as a GitHub App (not the default
+# GITHUB_TOKEN), which means commits and PRs it creates DO trigger downstream
+# workflows. CI auto-runs on the release PR, and the merge button works
+# normally — no manual `gh workflow run ci` step and no bypass needed.
 #
-#     gh workflow run ci -r release-please--branches--main--components--pyvolr-core
-#     # then check it:
-#     gh run watch
+# Secrets required (set via `gh secret set`):
+#   RELEASE_PLEASE_APP_ID   — the App's numeric ID
+#   RELEASE_PLEASE_APP_KEY  — the App's downloaded .pem private key
 #
-# (To remove this gap entirely, swap the GITHUB_TOKEN for a fine-scoped PAT
-# stored as RELEASE_PLEASE_TOKEN and pass it to the action's `token:` input.)
+# The App ("pyvolr-release-bot") needs only Contents: read+write and
+# Pull requests: read+write, installed on this repo only.
 
 on:
   push:
@@ -25,18 +26,22 @@ on:
 concurrency:
   group: release-please
 
-# Workflow-level: minimal. Only the release-please job needs write access.
+# Workflow-level: minimal. The job mints its own short-lived token from
+# the App and uses that instead of GITHUB_TOKEN.
 permissions:
   contents: read
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write       # create the release commit + tag
-      pull-requests: write  # open / update the Release PR
     steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
       - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          token: ${{ steps.app-token.outputs.token }}
