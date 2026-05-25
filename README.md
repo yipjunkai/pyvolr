@@ -18,8 +18,8 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
 ## ⚡ Performance
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/perf-dark.svg">
-  <img alt="BSM call pricing throughput: pyvolr vs py_vollib, log-log scaling by array size" src="docs/assets/perf-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-dark.svg">
+  <img alt="BSM call pricing throughput: pyvolr vs py_vollib, log-log scaling by array size" src="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-light.svg">
 </picture>
 
 | Scenario                      |   pyvolr | py_vollib | speedup |
