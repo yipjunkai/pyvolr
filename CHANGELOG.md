@@ -4,6 +4,34 @@ All notable changes to pyvolr are documented in this file. This file is
 maintained by [release-please](https://github.com/googleapis/release-please)
 from conventional commits — do not edit version sections by hand.
 
+## [0.1.1](https://github.com/yipjunkai/pyvolr/compare/v0.1.0...v0.1.1) (2026-05-25)
+
+
+### Features
+
+* **black76:** add Black-76 pricing model for futures and forward options ([#5](https://github.com/yipjunkai/pyvolr/issues/5)) ([0b86681](https://github.com/yipjunkai/pyvolr/commit/0b86681dd1d05ca8c85c5e7617ee96ee6326cf8b))
+
+
+### Bug Fixes
+
+* **differential:** locate py_lets_be_rational/constants.py via find, not import ([93ad431](https://github.com/yipjunkai/pyvolr/commit/93ad431d982b28e92029cd071c241d8297482d6f))
+* **fuzz:** align harness assertions with the math contract ([d073584](https://github.com/yipjunkai/pyvolr/commit/d073584db568de43cb497106947a2b5806e9bd4f))
+* **fuzz:** allow NaN price for realistic inputs (graceful-failure value) ([32a5db3](https://github.com/yipjunkai/pyvolr/commit/32a5db3e2748563fde37232d87c282a9001570e2))
+* **fuzz:** bound r, q, sigma absolutely to keep BSM intermediates finite ([2417bf4](https://github.com/yipjunkai/pyvolr/commit/2417bf4339fc877552694d7b88f27e7a48ad207d))
+* **fuzz:** require s * disc_q and k * disc_r to be finite in well-conditioned ([ed4fd8b](https://github.com/yipjunkai/pyvolr/commit/ed4fd8b7a100e5bd851701770a9b2f378314b626))
+* **fuzz:** rewrite bsm_price harness around a physically realistic input band ([0cf1512](https://github.com/yipjunkai/pyvolr/commit/0cf1512517cbcc701cadf38ef03c3b657e5fb4ba))
+* **fuzz:** scale negative-price tolerance relative to s + k ([3e4701a](https://github.com/yipjunkai/pyvolr/commit/3e4701adc80a9917ccaf54b6045ad1d1e707447d))
+* **fuzz:** tighten well-conditioned input bands to physically realistic ranges ([0d46d73](https://github.com/yipjunkai/pyvolr/commit/0d46d73cf9e92d81116145127492b9bc70ebf989))
+* **release-please:** use bare v* tag format for the root package ([5d76e1d](https://github.com/yipjunkai/pyvolr/commit/5d76e1d7dd63128c5ebe1ff11eab301f9b1c6c24))
+
+
+### Documentation
+
+* **governance, readme, why:** clarify release automation and credential management ([4f01aa9](https://github.com/yipjunkai/pyvolr/commit/4f01aa956f54b7cd6d1fdcc2afc952864a7c36dc))
+* **readme:** add performance chart (light + dark SVG variants) ([b186a84](https://github.com/yipjunkai/pyvolr/commit/b186a8451188caa7306a085e05371a4992a3258f))
+* **readme:** surface free-threaded Python (3.13t / 3.14t) support ([da1f2a0](https://github.com/yipjunkai/pyvolr/commit/da1f2a047d8555308d99cf8678ed8c2dca22f81f))
+* **readme:** swap the architecture diagram for performance numbers; expand badge row ([4a4f4df](https://github.com/yipjunkai/pyvolr/commit/4a4f4dfdb16b1d8ccf8f00bc170d79cefa87259e))
+
 ## [0.1.0] - 2026-05-24
 
 ### Features
