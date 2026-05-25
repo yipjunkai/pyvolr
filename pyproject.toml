@@ -103,7 +103,7 @@ ignore = [
 quote-style = "double"
 
 [tool.pyright]
-include = ["python", "tests"]
+include = ["python", "tests", ".github/scripts"]
 exclude = ["**/__pycache__", "target", "dist", ".venv"]
 pythonVersion = "3.10"
 typeCheckingMode = "strict"

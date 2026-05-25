@@ -244,6 +244,8 @@ debug/
 [Ll]ib64
 [Ll]ocal
 [Ss]cripts
+# CI helper scripts under .github/ are not virtualenv directories — keep them tracked.
+!.github/scripts/
 pyvenv.cfg
 pip-selfcheck.json
 

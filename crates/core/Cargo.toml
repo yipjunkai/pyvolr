@@ -35,6 +35,13 @@ extension-module = ["pyo3/extension-module"]
 
 [dev-dependencies]
 approx = "0.5"
+criterion = { version = "0.7", default-features = false, features = [
+  "cargo_bench_support",
+] }
+
+[[bench]]
+name = "pricing"
+harness = false
 
 [lints]
 workspace = true
