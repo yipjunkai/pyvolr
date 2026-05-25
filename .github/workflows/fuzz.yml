@@ -32,7 +32,7 @@ jobs:
           # pyo3 (transitively required via pyvolr-core) needs a Python
           # interpreter on PATH satisfying abi3-py310 at build time.
           python-version: "3.12"
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # master
         with:
           toolchain: nightly
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
