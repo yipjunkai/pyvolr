@@ -70,7 +70,7 @@ For options pricing specifically:
    Function signatures, scalar/return types, `'c'`/`'p'` flag conventions, and unit conventions (per-1%-vol vega, per-day theta, per-1%-rate rho) are all preserved.
 
 4. **Modern API for new code.** `pyvolr.bs` accepts numpy arrays, broadcasts in any shape, returns scalars when given scalars, and uses per-unit conventions consistently. The compat shim handles the legacy.
-5. **Engineered against re-abandonment.** Releases are automated via release-please + PyPI Trusted Publishing — releases require zero stored credentials and can be cut from a phone. Nightly differential tests run against `py_vollib` on a Python 3.10 sidecar to catch numerical drift. The full CI matrix tests every supported Python on every supported OS. The governance plan is in [GOVERNANCE.md](../GOVERNANCE.md).
+5. **Engineered against re-abandonment.** Releases are automated via release-please + PyPI Trusted Publishing. PyPI publication needs no stored credentials (OIDC); release-please authenticates as a repo-scoped GitHub App rather than a personal access token, so the credential survives a maintainer handoff. Releases can be cut from a phone. Nightly differential tests run against `py_vollib` on a Python 3.10 sidecar to catch numerical drift. The full CI matrix tests every supported Python on every supported OS. The governance plan is in [GOVERNANCE.md](../GOVERNANCE.md).
 
 ## What pyvolr doesn't fix
 

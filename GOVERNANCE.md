@@ -11,7 +11,7 @@ Stage: solo maintainer, active development.
 The following commitments aim to keep the project bootstrappable even if the current maintainer disappears:
 
 1. **All build and release infrastructure is in-repo**: every workflow, every config, every secret is in `.github/`. There is no out-of-band CI server. Anyone with repo access (or a fork) can ship a release.
-2. **Releases are automated**: `release-please` opens release PRs from conventional commits. Merging a release PR triggers wheel builds and PyPI publication via Trusted Publishing. No human credentials are stored.
+2. **Releases are automated**: `release-please` opens release PRs from conventional commits. Merging a release PR triggers wheel builds and PyPI publication via Trusted Publishing. PyPI publication uses no stored credentials (OIDC). The only stored credential is a GitHub App private key scoped to this repo with two narrow permissions (contents + PRs); the App is a machine identity that survives the maintainer leaving, and the tokens it mints at runtime expire in 1 hour.
 3. **No proprietary algorithms**: every numerical method is implemented from a public reference (paper, textbook). References are cited in source comments. Anyone can audit, fork, or replace.
 4. **Documentation lives with the code**: long-form rationale is in `docs/` (markdown); the README is the primary entry point. No external CMS or hosted docs site to maintain.
 

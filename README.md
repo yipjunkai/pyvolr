@@ -143,7 +143,7 @@ from pyvolr.compat.py_vollib.black_scholes.implied_volatility import implied_vol
 from pyvolr.compat.py_vollib.black import black  # futures options
 ```
 
-The compat shim also preserves py*vollib's \_unit conventions*: vega is per-1% vol, theta is per-day, rho is per-1% rate, and `implied_volatility` takes `flag` as its last argument. For new code, prefer the modern `pyvolr.bs` API — it accepts numpy arrays, broadcasts naturally, uses per-unit conventions consistently, and returns all Greeks in a single call.
+The compat shim also preserves py_vollib's _unit conventions_: vega is per-1% vol, theta is per-day, rho is per-1% rate, and `implied_volatility` takes `flag` as its last argument. For new code, prefer the modern `pyvolr.bs` API — it accepts numpy arrays, broadcasts naturally, uses per-unit conventions consistently, and returns all Greeks in a single call.
 
 ## 🤔 Why pyvolr exists
 
@@ -198,7 +198,7 @@ pyvolr/
 
 `py_vollib` died because nobody was paid to maintain it. pyvolr is engineered to outlive its maintainer:
 
-- **One-click releases** via release-please + PyPI Trusted Publishing (no stored credentials, no manual `twine upload`)
+- **One-click releases** via release-please + PyPI Trusted Publishing — PyPI publication needs no stored credentials (OIDC), and release-please authenticates as a repo-scoped GitHub App rather than a user PAT, so the credential survives a maintainer handoff
 - **Nightly differential tests** against `py_vollib` on a Python 3.10 sidecar to catch numerical drift
 - **Wide CI matrix** (Python 3.10–3.14 × Linux/macOS/Windows) — the specific failure mode that killed the predecessor
 - **All GitHub Actions pinned** with weekly Dependabot bumps, hardening against supply-chain attacks
