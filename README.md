@@ -18,8 +18,8 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
 ## ⚡ Performance
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/perf-dark.svg">
-  <img alt="BSM call pricing throughput: pyvolr vs py_vollib, log-log scaling by array size" src="docs/assets/perf-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-dark.svg">
+  <img alt="BSM call pricing throughput: pyvolr vs py_vollib, log-log scaling by array size" src="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-light.svg">
 </picture>
 
 | Scenario                      |   pyvolr | py_vollib | speedup |
@@ -156,20 +156,23 @@ Full backstory: [docs/why.md](docs/why.md).
 ```text
 pyvolr/
 ├── crates/core/             # Rust numerical core
-│   └── src/
-│       ├── lib.rs           # PyO3 bindings (flat-array entry points)
-│       ├── bsm.rs           # BSM pricing, d1/d2, forward price
-│       ├── black76.rs       # Black-76 (futures options) — delegates to BSM with q=r
-│       ├── greeks.rs        # Delta, gamma, theta, vega, rho
-│       ├── iv.rs            # Newton + Manaster-Koehler + bisection IV solver
-│       └── normal.rs        # erf-based standard normal CDF / PDF
+│   ├── src/
+│   │   ├── lib.rs           # PyO3 bindings (flat-array entry points)
+│   │   ├── bsm.rs           # BSM pricing, d1/d2, forward price
+│   │   ├── black76.rs       # Black-76 (futures options) — delegates to BSM with q=r
+│   │   ├── greeks.rs        # Delta, gamma, theta, vega, rho
+│   │   ├── iv.rs            # Newton + Manaster-Koehler + bisection IV solver
+│   │   └── normal.rs        # erf-based standard normal CDF / PDF
+│   └── benches/             # criterion benches gating the README's perf claims
 ├── python/pyvolr/
 │   ├── bs.py                # BSM public API (numpy-broadcast wrappers)
 │   ├── black76.py           # Black-76 public API
+│   ├── _wrappers.py         # Shared FFI helpers (broadcast, flag normalize)
 │   ├── _core.pyi            # Type stubs for the Rust extension
 │   └── compat/py_vollib/    # Drop-in shim mirroring py_vollib's tree
 ├── tests/                   # pytest + hypothesis property tests
-├── .github/workflows/       # ci, release, release-please, differential, fuzz, security, scorecard, stale
+├── .github/workflows/       # ci, release, release-please, differential, fuzz, perf, security, scorecard, stale
+├── .github/scripts/         # CI helper scripts (perf-gate comparator)
 ├── Cargo.toml               # Rust workspace
 └── pyproject.toml           # maturin build backend + project config
 ```
