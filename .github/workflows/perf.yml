@@ -57,6 +57,7 @@ jobs:
       #    the bench harness — we tolerate that and fall through.
       - name: Bench (base ref, baseline=base)
         id: bench_base
+        if: github.event_name == 'pull_request'
         continue-on-error: true
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -71,6 +72,15 @@ jobs:
             exit 0
           fi
           cargo bench --bench pricing -- --save-baseline base
+
+      # The previous step left the working tree on the base ref, which means
+      # `.github/scripts/check_perf.py` may not exist there (it doesn't on a
+      # bootstrap PR).  Return to the PR head so the comparator script is
+      # present.  `target/criterion/` is untouched by git checkout, so both
+      # baselines remain available.
+      - name: Restore PR head
+        if: always() && github.event_name == 'pull_request'
+        run: git checkout --detach "$GITHUB_SHA"
 
       # 3) Compare.  Bootstrap PRs (no base baseline) print notices and exit 0.
       - name: Compare baselines
