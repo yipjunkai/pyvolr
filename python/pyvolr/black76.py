@@ -22,13 +22,23 @@ Put-call parity for Black-76: `C - P = exp(-r*T) * (F - K)`.
 
 from __future__ import annotations
 
-from typing import Any
-
-import numpy as np
-from numpy.typing import ArrayLike, NDArray
+from typing import TYPE_CHECKING, Any
 
 from pyvolr import _core
-from pyvolr.bs import broadcast_f64, normalize_flag, scalar_or_array
+from pyvolr._wrappers import (
+    FlagInput as _FlagInput,
+)
+from pyvolr._wrappers import (
+    Result as _Result,
+)
+from pyvolr._wrappers import (
+    broadcast_f64,
+    normalize_flag,
+    scalar_or_array,
+)
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
 
 __all__ = [
     "delta",
@@ -40,9 +50,6 @@ __all__ = [
     "theta",
     "vega",
 ]
-
-_FlagInput = ArrayLike | str
-_Result = float | NDArray[np.float64]
 
 
 def price(
