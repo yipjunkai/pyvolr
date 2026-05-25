@@ -1,0 +1,87 @@
+name: perf
+
+# Gates the README's "100×+ speedup" claim. Runs criterion benches on the
+# PR's base ref and on the PR head, then fails the job if any benchmark
+# regressed by more than the threshold. The first PR that lands the bench
+# harness bootstraps the baselines — comparisons start with the second PR.
+
+on:
+  pull_request:
+    paths:
+      - "crates/core/src/**"
+      - "crates/core/benches/**"
+      - "crates/core/Cargo.toml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/perf.yml"
+      - ".github/scripts/check_perf.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perf:
+    name: perf-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Threshold for regression failures, expressed as a fraction
+      # (0.10 == 10%). GitHub-hosted runner noise is typically 3-8%; this
+      # threshold catches real regressions (>10%) while absorbing noise.
+      PERF_THRESHOLD: "0.10"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Need both base and PR head accessible locally to flip between them.
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          # pyo3 needs a Python interpreter on PATH to satisfy abi3-py310 at
+          # build time. extension-module is off when running benches.
+          python-version: "3.12"
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: perf
+
+      # 1) Bench PR head.  PR head is what `actions/checkout` already left us on.
+      - name: Bench (PR head, baseline=pr)
+        run: cargo bench --bench pricing -- --save-baseline pr
+
+      # 2) Bench the PR's base ref.  May fail on the first PR that introduces
+      #    the bench harness — we tolerate that and fall through.
+      - name: Bench (base ref, baseline=base)
+        id: bench_base
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -e
+          git fetch origin "$BASE_REF" --depth=1
+          # Detached checkout: we don't care about preserving local refs and
+          # the post-step doesn't need to push.
+          git checkout --detach "origin/$BASE_REF"
+          if [ ! -f crates/core/benches/pricing.rs ]; then
+            echo "::notice::No benches/pricing.rs on base ref; bootstrapping baselines this run."
+            exit 0
+          fi
+          cargo bench --bench pricing -- --save-baseline base
+
+      # The previous step left the working tree on the base ref, which means
+      # `.github/scripts/check_perf.py` may not exist there (it doesn't on a
+      # bootstrap PR).  Return to the PR head so the comparator script is
+      # present.  `target/criterion/` is untouched by git checkout, so both
+      # baselines remain available.
+      - name: Restore PR head
+        if: always() && github.event_name == 'pull_request'
+        run: git checkout --detach "$GITHUB_SHA"
+
+      # 3) Compare.  Bootstrap PRs (no base baseline) print notices and exit 0.
+      - name: Compare baselines
+        run: python .github/scripts/check_perf.py base pr "$PERF_THRESHOLD"
