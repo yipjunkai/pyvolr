@@ -119,6 +119,7 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 ## 🗺️ Coming soon
 
 - [ ] Jäckel "Let's Be Rational" implied volatility (2-iteration convergence)
+- [ ] Drop-in compat shim for `py_vollib_vectorized` (`vectorized_*` API + `price_dataframe`/`get_all_greeks`, pandas as soft dep)
 - [ ] Bachelier (normal model, for negative rates)
 - [ ] Higher-order Greeks (vanna, vomma, charm, speed, zomma, color)
 - [ ] SIMD batch evaluation + `rayon` parallelism for large arrays
