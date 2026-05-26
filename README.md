@@ -37,7 +37,7 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
 
 Vectorize anything you can — that's where pyvolr wins. For a single scalar `price` call, py_vollib's pure-Python path edges out pyvolr because the PyO3 FFI roundtrip + numpy broadcasting setup costs a few microseconds; even a 2-element array call already favors pyvolr. Black-76's profile tracks BSM's exactly because the Rust core delegates to `bsm::price` with `q=r` rather than duplicating math.
 
-Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.1 vs py_vollib 1.0.1.
+Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.2 vs py_vollib 1.0.1.
 
 ## 📦 Install
 

@@ -132,7 +132,7 @@ def render(out: Path, *, theme: str) -> None:
     fig.text(
         0.5,
         0.01,
-        "Apple M4 Pro · Python 3.10.20 · pyvolr 0.1.1 vs py_vollib 1.0.1 · "
+        "Apple M4 Pro · Python 3.10.20 · pyvolr 0.1.2 vs py_vollib 1.0.1 · "
         "IV via Jäckel “Let's Be Rational” (1e-13 precision)",
         ha="center",
         fontsize=9,
