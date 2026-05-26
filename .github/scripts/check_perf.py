@@ -59,9 +59,11 @@ from pathlib import Path
 # Ceilings are set comfortably above the CI-measured worst case to absorb
 # day-to-day GitHub-runner noise.
 PER_BENCH_THRESHOLDS: dict[str, float] = {
-    # IV solver (intrinsically more work per call than Newton+bisection):
-    "iv_solve_scalar_atm": 0.90,
-    "iv_solve_vec": 0.85,
+    # IV solver (intrinsically more work per call than Newton+bisection).
+    # CI runs observed at +77.80%/+79.41% (scalar) and +73.47%/+73.40% (vec);
+    # ceilings give ~5 pp margin over the worst observation:
+    "iv_solve_scalar_atm": 0.85,
+    "iv_solve_vec": 0.80,
     # Note: iv_solve_scalar_otm_short does not need an override — CI shows
     # LBR is *faster* than Newton+bisection on this case (-10.88%), because
     # Newton degenerated to bisection at OTM short-expiry where vega is small
