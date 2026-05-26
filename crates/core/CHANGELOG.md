@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/yipjunkai/pyvolr/compare/v0.1.1...v0.1.2) (2026-05-26)
+
+
+### Features
+
+* **iv:** replace Newton/bisection with Jäckel "Let's Be Rational" ([#10](https://github.com/yipjunkai/pyvolr/issues/10)) ([4fe0ff1](https://github.com/yipjunkai/pyvolr/commit/4fe0ff14d5d83576bb7fea1239a69d085646b0d6))
+
 ## [0.1.1](https://github.com/yipjunkai/pyvolr/compare/v0.1.0...v0.1.1) (2026-05-25)
 
 
