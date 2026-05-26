@@ -156,7 +156,9 @@ class TestImpliedVol:
         F, K, T, r, sigma = 100.0, 100.0, 1.0, 0.05, 0.25
         p = black76.price("c", F=F, K=K, T=T, r=r, sigma=sigma)
         recovered = black76.implied_vol(price=p, flag="c", F=F, K=K, T=T, r=r)
-        assert recovered == pytest.approx(sigma, abs=1e-6)
+        # Black-76 IV routes through iv::solve (the LBR solver), so the same
+        # ~1e-13 precision applies as for BSM IV.
+        assert recovered == pytest.approx(sigma, rel=1e-12)
 
     def test_below_no_arb_returns_nan(self) -> None:
         # No-arb lower bound for call: exp(-rT) * max(F-K, 0).

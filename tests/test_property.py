@@ -116,9 +116,10 @@ class TestIvRoundtrip:
         iv = bs.implied_vol(p, fl, S=s, K=k, T=t, r=r, q=q)
         assume(not np.isnan(iv))
         p_recovered = bs.price(fl, S=s, K=k, T=t, r=r, sigma=iv, q=q)
-        # Price -> IV -> price must agree to within the solver's PRICE_TOL (1e-10).
-        atol = max(1e-9, 1e-9 * max(1.0, p))
-        assert p_recovered == pytest.approx(p, abs=atol, rel=1e-8)
+        # LBR converges to f64 precision in IV space; round-trip price drift
+        # is bounded by vega·ε. Tightened from the prior Newton solver's 1e-9.
+        atol = max(1e-12, 1e-12 * max(1.0, p))
+        assert p_recovered == pytest.approx(p, abs=atol, rel=1e-11)
 
     @given(
         spot,
@@ -139,7 +140,8 @@ class TestIvRoundtrip:
         assume(v > 1e-4 * max(1.0, s))  # filter ill-conditioned tails
         iv = bs.implied_vol(p, fl, S=s, K=k, T=t, r=r, q=q)
         assume(not np.isnan(iv))
-        assert iv == pytest.approx(sigma, abs=1e-6)
+        # LBR roundtrip precision; tightened from the prior Newton solver's 1e-6.
+        assert iv == pytest.approx(sigma, rel=1e-12)
 
 
 # Black-76 uses forward F instead of spot S; same parameter ranges otherwise.
