@@ -24,9 +24,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # (n_options, pyvolr_microseconds, py_vollib_microseconds)
+# Refreshed post-LBR + cdf/erfcx perf work; produced by
+# `python bench/compare_py_vollib.py`.
 N = np.array([1, 1_000, 10_000, 100_000, 1_000_000])
-PV = np.array([4.0, 25.4, 157.0, 1_480.0, 15_180.0])
-PVOL = np.array([2.0, 2_160.0, 21_730.0, 217_530.0, 2_204_000.0])
+PV = np.array([4.1, 29.3, 187.8, 1_670.0, 17_460.0])
+PVOL = np.array([2.2, 2_320.0, 23_320.0, 234_910.0, 2_350_000.0])
 
 PV_COLOR = "#CE422B"  # rust orange
 PVOL_COLOR_LIGHT = "#6C757D"  # slate gray for light theme
@@ -130,7 +132,8 @@ def render(out: Path, *, theme: str) -> None:
     fig.text(
         0.5,
         0.01,
-        "Apple M4 Pro · Python 3.10.20 · pyvolr 0.1.0 vs py_vollib 1.0.1",
+        "Apple M4 Pro · Python 3.10.20 · pyvolr 0.1.1 vs py_vollib 1.0.1 · "
+        "IV via Jäckel “Let's Be Rational” (1e-13 precision)",
         ha="center",
         fontsize=9,
         color=muted_color,

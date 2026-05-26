@@ -131,11 +131,13 @@ SIGMAS = [0.10, 0.25, 0.50]
 FLAGS = ["c", "p"]
 YIELDS = [0.0, 0.03]  # for Merton variant
 
-# Tolerance: 1e-10 absolute is consistent with the IV solver's PRICE_TOL and
-# well above f64 roundoff at these magnitudes (max price ~150).
+# 1e-10 absolute for price/Greeks is well above f64 roundoff at these
+# magnitudes (max price ~150) and matches what the bsm/black76 unit tests use.
 PRICE_TOL = 1e-10
 GREEK_TOL = 1e-10
-IV_TOL = 1e-6  # both solvers use different internal algorithms; loosen
+# With LBR, both libraries now use Jäckel's algorithm under the hood; the
+# differential collapses to f64 precision. Tightened from 1e-6.
+IV_TOL = 1e-12
 
 
 def _params(*axes):

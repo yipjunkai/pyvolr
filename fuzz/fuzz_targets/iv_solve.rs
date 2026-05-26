@@ -1,7 +1,8 @@
 //! Fuzz target for `pyvolr_core::iv::solve`.
 //!
-//! IV inversion is the trickiest part of the math (Newton-Raphson + bisection
-//! fallback). Goals:
+//! IV inversion is the trickiest part of the math (Jäckel "Let's Be Rational":
+//! 4-region normalised Black evaluator + rational-cubic initial guess +
+//! Householder order-4 iteration). Goals:
 //!   1. No input can panic, hang, or escape with a non-finite recovered sigma.
 //!   2. When the solver claims convergence, the roundtrip price matches.
 
@@ -30,10 +31,10 @@ fuzz_target!(|inp: Input| {
     // input region. Anything else: just check we don't panic.
     //
     // The bounds on `s` and `k` keep the option price within ~1e10 of
-    // magnitude, where the solver's internal absolute PRICE_TOL=1e-10
-    // remains numerically meaningful. For prices around 1e188 (which a
-    // spot price of 1e199 produces), 1e-10 absolute precision exceeds
-    // f64's ~15 significant digits and the solver cannot achieve it.
+    // magnitude, where the price-roundtrip check below remains
+    // numerically meaningful.  For prices around 1e188 (which a spot
+    // price of 1e199 produces), even LBR's f64-precision IV can't be
+    // reproduced through price() without intermediate denormal loss.
     if !(inp.s.is_finite()
         && inp.k.is_finite()
         && inp.t.is_finite()
@@ -80,13 +81,14 @@ fuzz_target!(|inp: Input| {
     let p_back = price(flag, inp.s, inp.k, inp.t, inp.r, inp.q, recovered);
     assert!(p_back.is_finite(), "non-finite roundtrip price for converged solve");
 
-    // The solver's nominal contract is `|price(recovered) - target| < PRICE_TOL`
-    // where PRICE_TOL = 1e-10. In practice the bisection fallback exits on
-    // interval-width < 1e-12, which caps realized accuracy at ~vega * 1e-12 —
-    // up to ~1e-7 for high-vega inputs (large s, moderate vol). Use 1e-6 as
-    // the absolute floor and 1e-5 as the relative tolerance: still tight
-    // enough to catch a 10x regression, generous enough to absorb the gap
-    // between the solver's nominal and realized accuracy.
+    // LBR converges to ~1e-13 IV precision, which gives ~vega·1e-13 price
+    // drift on the round-trip — well below the band below at the realistic
+    // grid (test_iv.py, test_differential.py).  The fuzz harness explores
+    // f64 extremes (near-denormal vega, x near ±100, near-no-arb prices)
+    // where intermediate roundoff can still produce visible drift, so the
+    // tolerance band is kept deliberately generous: 1e-6 absolute floor,
+    // 1e-5 relative.  Loose enough to absorb the gap at the edge of the
+    // well-conditioned region; tight enough to catch any 10× regression.
     let tol = 1e-6_f64.max(1e-5 * p.abs());
     let err = (p_back - p).abs();
     assert!(

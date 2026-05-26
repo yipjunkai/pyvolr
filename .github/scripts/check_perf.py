@@ -6,11 +6,16 @@ Usage: check_perf.py <base-name> <new-name> <threshold-fraction>
 Walks `target/criterion/` for paired `estimates.json` files (one under
 `<base-name>/`, one under `<new-name>/`). For each pair, computes the
 percent change of the mean estimate. Exits non-zero if any benchmark
-regressed by more than `threshold-fraction` (e.g. 0.10 == 10%).
+regressed by more than its ceiling (the third CLI arg by default, or a
+per-benchmark override from `PER_BENCH_THRESHOLDS`).
 
 Bootstrap behavior: when no `<base-name>/estimates.json` exists for a given
 benchmark (typical on the first PR that adds the bench harness), the
 benchmark is skipped, not failed.
+
+Per-benchmark overrides: `PER_BENCH_THRESHOLDS` below lets specific benches
+use a higher ceiling than the global default. Use sparingly and document
+the reason; each entry encodes a deliberate accepted regression.
 """
 
 from __future__ import annotations
@@ -18,6 +23,65 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+
+# Per-benchmark threshold overrides (fraction). A bench name matches when it
+# equals the key exactly, or when it is a child path (criterion groups expose
+# `<group>/<param>` under target/criterion/).
+#
+# LBR IV solver (Jäckel "Let's Be Rational") replaces the prior
+# Newton+bisection in PR feat/lbr-iv.  Two sources of regression:
+#
+# (1) IV solver:  LBR evaluates a 4-region `b(x, s)` dispatcher and runs
+#     a bounded Householder-4 iteration; Newton called a single
+#     `bsm::price` per iter and stopped at 1e-10 absolute (~1e-6 IV).
+#     The tradeoff buys ~10^7 more IV precision and bounded worst-case
+#     latency at the no-arbitrage boundary.  Local measurements (Apple
+#     M4 Pro) show +30-55%; GitHub-hosted Linux runners measure +73-79%
+#     on the same benches — slower libm, shared CPU.
+#
+# (2) Price/Greeks:  `normal::cdf` switches to an `erfcx`-based form for
+#     `|z| > 4` so `bsm::price` stays f64-accurate in the deep OTM tail
+#     (libm::erf saturates at +/-1 past z/sqrt(2) ≈ 5.93, which made the
+#     prior cdf lossy and broke LBR's lower-map roundtrip at extreme x).
+#     The added branch on the common path is amortised away in the
+#     vectorised benches (bsm_price_vec is actually *faster* on CI) but
+#     remains visible on the scalar paths.  CI measurements:
+#       initial implementation:           bsm_price_scalar +30%
+#       after #[cold] on tail:            bsm_price_scalar +30% (no win on x86_64)
+#       after INV_SQRT_2 + drop
+#         #[inline(never)] on tail:       bsm_price_scalar +23%
+#     The remaining 23-26% is the irreducible cost on Linux x86_64 of
+#     keeping bsm::price f64-accurate at deep OTM, which the differential
+#     test against py_vollib requires.  Splitting cdf into fast and precise
+#     variants would dodge the cost but breaks the differential at the
+#     |d1| ~ 5-6 inputs in the differential grid.
+#
+# Ceilings are set comfortably above the CI-measured worst case to absorb
+# day-to-day GitHub-runner noise.
+PER_BENCH_THRESHOLDS: dict[str, float] = {
+    # IV solver (intrinsically more work per call than Newton+bisection).
+    # CI runs observed at +77.80%/+79.41% (scalar) and +73.47%/+73.40% (vec);
+    # ceilings give ~5 pp margin over the worst observation:
+    "iv_solve_scalar_atm": 0.85,
+    "iv_solve_vec": 0.80,
+    # Note: iv_solve_scalar_otm_short does not need an override — CI shows
+    # LBR is *faster* than Newton+bisection on this case (-10.88%), because
+    # Newton degenerated to bisection at OTM short-expiry where vega is small
+    # and LBR's bounded Householder iteration stays at ≤ 2 iters regardless.
+    # The default 10% ceiling guards against future regression.
+    #
+    # Price/Greek benches affected by the cdf erfcx-tail branch:
+    "bsm_price_scalar": 0.30,
+    "black76_price_scalar": 0.30,
+}
+
+
+def threshold_for(rel: str, default: float) -> tuple[float, bool]:
+    """Return (threshold, is_override) for the given benchmark path."""
+    for prefix, t in PER_BENCH_THRESHOLDS.items():
+        if rel == prefix or rel.startswith(prefix + "/"):
+            return t, True
+    return default, False
 
 
 def main() -> int:
@@ -33,9 +97,10 @@ def main() -> int:
         print(f"::error::{root} not found; nothing to compare", file=sys.stderr)
         return 1
 
-    failed: list[tuple[str, float]] = []
+    failed: list[tuple[str, float, float]] = []
     compared = 0
     skipped = 0
+    any_override_applied = False
 
     for new_est in sorted(root.rglob(f"{new_name}/estimates.json")):
         bench_dir = new_est.parent.parent
@@ -59,21 +124,27 @@ def main() -> int:
             continue
 
         change = (new_mean - base_mean) / base_mean
+        bench_threshold, overridden = threshold_for(rel, threshold)
+        any_override_applied = any_override_applied or overridden
         compared += 1
         # Criterion stores times in nanoseconds.
-        print(f"  {rel:48s}  {base_mean:>12.1f} ns -> {new_mean:>12.1f} ns  ({change * 100:+.2f}%)")
-        if change > threshold:
-            failed.append((rel, change))
+        marker = "*" if overridden else " "
+        print(
+            f" {marker}{rel:47s}  {base_mean:>12.1f} ns -> {new_mean:>12.1f} ns "
+            f" ({change * 100:+.2f}%, ceiling {bench_threshold * 100:.0f}%)"
+        )
+        if change > bench_threshold:
+            failed.append((rel, change, bench_threshold))
 
     print(f"\nCompared {compared} benchmarks, skipped {skipped}.")
+    if any_override_applied:
+        print("(*) per-benchmark override applied — see PER_BENCH_THRESHOLDS in check_perf.py.")
     if failed:
-        print(
-            f"\n::error::{len(failed)} benchmark(s) regressed by more than {threshold * 100:.0f}%:"
-        )
-        for name, change in failed:
-            print(f"  - {name}: +{change * 100:.2f}%")
+        print(f"\n::error::{len(failed)} benchmark(s) exceeded their ceiling:")
+        for name, change, ceiling in failed:
+            print(f"  - {name}: +{change * 100:.2f}% (ceiling {ceiling * 100:.0f}%)")
         return 1
-    print(f"All compared benchmarks within {threshold * 100:.0f}% threshold.")
+    print("All compared benchmarks within their ceilings.")
     return 0
 
 

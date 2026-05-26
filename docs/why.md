@@ -85,5 +85,4 @@ The wider Python quant ecosystem is full of similar abandoned-library bombs. `py
 
 - Hull, J. C. (2017). _Options, Futures, and Other Derivatives_ (10th ed.). Pearson.
 - Merton, R. C. (1973). Theory of rational option pricing. _Bell Journal of Economics and Management Science_, 4(1), 141–183.
-- Manaster, S., & Koehler, G. (1982). The calculation of implied variances from the Black-Scholes model: a note. _Journal of Finance_, 37(1), 227–230.
 - Jäckel, P. (2015). Let's Be Rational. _Wilmott_, 75, 40–53.

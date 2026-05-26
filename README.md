@@ -109,7 +109,7 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 - **Black-Scholes-Merton pricing** — calls and puts with continuous dividend yield
 - **Black-76 pricing** — European options on futures/forwards (`pyvolr.black76`), same vectorized API as `bs`
 - **Analytical Greeks** — delta, gamma, theta, vega, rho (with documented sign and unit conventions)
-- **Robust implied volatility** — Newton-Raphson seeded by Manaster-Koehler, bisection fallback for OTM tails and tiny-vega regimes
+- **Robust implied volatility** — Jäckel "Let's Be Rational" algorithm: rational-cubic initial guess plus Householder order-4 iteration converges to ~1e-13 precision in ≤2 iterations across the full no-arbitrage range
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
 - **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree (including `py_vollib.black`) for one-import-line migration
 - **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
@@ -118,7 +118,7 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 
 ## 🗺️ Coming soon
 
-- [ ] Jäckel "Let's Be Rational" implied volatility (2-iteration convergence)
+- [ ] Drop-in compat shim for `py_vollib_vectorized` (`vectorized_*` API + `price_dataframe`/`get_all_greeks`, pandas as soft dep)
 - [ ] Bachelier (normal model, for negative rates)
 - [ ] Higher-order Greeks (vanna, vomma, charm, speed, zomma, color)
 - [ ] SIMD batch evaluation + `rayon` parallelism for large arrays
@@ -161,8 +161,8 @@ pyvolr/
 │   │   ├── bsm.rs           # BSM pricing, d1/d2, forward price
 │   │   ├── black76.rs       # Black-76 (futures options) — delegates to BSM with q=r
 │   │   ├── greeks.rs        # Delta, gamma, theta, vega, rho
-│   │   ├── iv.rs            # Newton + Manaster-Koehler + bisection IV solver
-│   │   └── normal.rs        # erf-based standard normal CDF / PDF
+│   │   ├── iv.rs            # Jäckel "Let's Be Rational" IV solver (Householder-4, ≤2 iters)
+│   │   └── normal.rs        # Φ / φ, erfcx (Lentz CF), inverse CDF (Wichura AS241)
 │   └── benches/             # criterion benches gating the README's perf claims
 ├── python/pyvolr/
 │   ├── bs.py                # BSM public API (numpy-broadcast wrappers)
@@ -217,4 +217,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Particularly welcome: new pricing models
 
 Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option.
 
-Algorithms are reimplemented from published references (Hull, Merton, Manaster-Koehler); no third-party source code is incorporated.
+Algorithms are reimplemented from published references (Hull, Merton, Jäckel); no third-party source code is incorporated.

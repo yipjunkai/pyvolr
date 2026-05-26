@@ -116,9 +116,10 @@ class TestIvRoundtrip:
         iv = bs.implied_vol(p, fl, S=s, K=k, T=t, r=r, q=q)
         assume(not np.isnan(iv))
         p_recovered = bs.price(fl, S=s, K=k, T=t, r=r, sigma=iv, q=q)
-        # Price -> IV -> price must agree to within the solver's PRICE_TOL (1e-10).
-        atol = max(1e-9, 1e-9 * max(1.0, p))
-        assert p_recovered == pytest.approx(p, abs=atol, rel=1e-8)
+        # LBR converges to f64 precision in IV space; round-trip price drift
+        # is bounded by vega·ε. Tightened from the prior Newton solver's 1e-9.
+        atol = max(1e-12, 1e-12 * max(1.0, p))
+        assert p_recovered == pytest.approx(p, abs=atol, rel=1e-11)
 
     @given(
         spot,
@@ -139,7 +140,12 @@ class TestIvRoundtrip:
         assume(v > 1e-4 * max(1.0, s))  # filter ill-conditioned tails
         iv = bs.implied_vol(p, fl, S=s, K=k, T=t, r=r, q=q)
         assume(not np.isnan(iv))
-        assert iv == pytest.approx(sigma, abs=1e-6)
+        # LBR converges to ~1e-13 IV precision at moderate moneyness, but
+        # hypothesis's thorough profile finds deeper-ITM/OTM + high-vol corners
+        # where the IV-recovery drift is bounded by `vega * eps_b` and can
+        # reach ~5e-12 relative. 1e-10 is 10^4 tighter than the prior Newton
+        # bound (1e-6) and leaves headroom for those corners.
+        assert iv == pytest.approx(sigma, rel=1e-10)
 
 
 # Black-76 uses forward F instead of spot S; same parameter ranges otherwise.
@@ -226,4 +232,6 @@ class TestBlack76IvRoundtrip:
         assume(v > 1e-4 * max(1.0, f))
         iv = black76.implied_vol(p, fl, F=f, K=k, T=t, r=r)
         assume(not np.isnan(iv))
-        assert iv == pytest.approx(sigma, abs=1e-6)
+        # See `TestIvRoundtrip.test_iv_recovers_sigma_when_well_conditioned`
+        # for the rationale on the 1e-10 bound under hypothesis's thorough profile.
+        assert iv == pytest.approx(sigma, rel=1e-10)

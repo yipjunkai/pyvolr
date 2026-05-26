@@ -311,3 +311,6 @@ fuzz/target/
 fuzz/artifacts/
 fuzz/corpus/
 fuzz/coverage/
+
+# Local-only working notes (not for commit)
+TODO.md

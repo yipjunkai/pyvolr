@@ -24,7 +24,9 @@ class TestBlackScholesShim:
 
         p = bs.price("c", S=100, K=100, T=1.0, r=0.05, sigma=0.20)
         iv = implied_volatility(p, 100.0, 100.0, 1.0, 0.05, "c")
-        assert iv == pytest.approx(0.20, abs=1e-6)
+        # Compat shim routes through iv::solve (LBR), so the same ~1e-13
+        # precision applies as for the modern pyvolr.bs.implied_vol API.
+        assert iv == pytest.approx(0.20, rel=1e-12)
 
 
 class TestBlackScholesGreeksShim:
@@ -117,7 +119,7 @@ class TestBlack76Shim:
 
         p = black76.price("c", F=100, K=100, T=1.0, r=0.05, sigma=0.20)
         iv = implied_volatility(p, 100.0, 100.0, 0.05, 1.0, "c")
-        assert iv == pytest.approx(0.20, abs=1e-6)
+        assert iv == pytest.approx(0.20, rel=1e-12)
 
 
 class TestBlack76GreeksShim:
