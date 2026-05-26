@@ -36,28 +36,41 @@ from pathlib import Path
 #     `bsm::price` per iter and stopped at 1e-10 absolute (~1e-6 IV).
 #     The tradeoff buys ~10^7 more IV precision and bounded worst-case
 #     latency at the no-arbitrage boundary.  Local measurements (Apple
-#     M4 Pro) showed +30-55%; GitHub-hosted Linux runners measure
-#     +73-78% on the same benches — slower libm, shared CPU.
+#     M4 Pro) show +30-55%; GitHub-hosted Linux runners measure +73-79%
+#     on the same benches — slower libm, shared CPU.
 #
 # (2) Price/Greeks:  `normal::cdf` switches to an `erfcx`-based form for
 #     `|z| > 4` so `bsm::price` stays f64-accurate in the deep OTM tail
 #     (libm::erf saturates at +/-1 past z/sqrt(2) ≈ 5.93, which made the
 #     prior cdf lossy and broke LBR's lower-map roundtrip at extreme x).
-#     The added branch on the common path costs ~11-12% in `bsm_price_scalar`
-#     and `black76_price_scalar` on CI runners.  This is a deliberate
-#     precision-vs-speed tradeoff — without it, neither the LBR IV solver
-#     nor `bsm::price` itself can reach 1e-13 precision in the tails.
+#     The added branch on the common path is amortised away in the
+#     vectorised benches (bsm_price_vec is actually *faster* on CI) but
+#     remains visible on the scalar paths.  CI measurements:
+#       initial implementation:           bsm_price_scalar +30%
+#       after #[cold] on tail:            bsm_price_scalar +30% (no win on x86_64)
+#       after INV_SQRT_2 + drop
+#         #[inline(never)] on tail:       bsm_price_scalar +23%
+#     The remaining 23-26% is the irreducible cost on Linux x86_64 of
+#     keeping bsm::price f64-accurate at deep OTM, which the differential
+#     test against py_vollib requires.  Splitting cdf into fast and precise
+#     variants would dodge the cost but breaks the differential at the
+#     |d1| ~ 5-6 inputs in the differential grid.
 #
 # Ceilings are set comfortably above the CI-measured worst case to absorb
 # day-to-day GitHub-runner noise.
 PER_BENCH_THRESHOLDS: dict[str, float] = {
     # IV solver (intrinsically more work per call than Newton+bisection):
     "iv_solve_scalar_atm": 0.90,
-    "iv_solve_scalar_otm_short": 0.30,
     "iv_solve_vec": 0.85,
+    # Note: iv_solve_scalar_otm_short does not need an override — CI shows
+    # LBR is *faster* than Newton+bisection on this case (-10.88%), because
+    # Newton degenerated to bisection at OTM short-expiry where vega is small
+    # and LBR's bounded Householder iteration stays at ≤ 2 iters regardless.
+    # The default 10% ceiling guards against future regression.
+    #
     # Price/Greek benches affected by the cdf erfcx-tail branch:
-    "bsm_price_scalar": 0.20,
-    "black76_price_scalar": 0.20,
+    "bsm_price_scalar": 0.30,
+    "black76_price_scalar": 0.30,
 }
 
 
