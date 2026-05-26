@@ -4,6 +4,20 @@ All notable changes to pyvolr are documented in this file. This file is
 maintained by [release-please](https://github.com/googleapis/release-please)
 from conventional commits — do not edit version sections by hand.
 
+## [0.1.2](https://github.com/yipjunkai/pyvolr/compare/v0.1.1...v0.1.2) (2026-05-26)
+
+
+### Features
+
+* **iv:** replace Newton/bisection with Jäckel "Let's Be Rational" ([#10](https://github.com/yipjunkai/pyvolr/issues/10)) ([4fe0ff1](https://github.com/yipjunkai/pyvolr/commit/4fe0ff14d5d83576bb7fea1239a69d085646b0d6))
+
+
+### Documentation
+
+* bump version reference to 0.1.2 in README + chart footer ([b66f9a7](https://github.com/yipjunkai/pyvolr/commit/b66f9a7afb0b93f43954819f3e61fb7c4614af91))
+* **readme:** refresh perf table to post-LBR bench; bump 0.1.0 -&gt; 0.1.1 ([6398f5b](https://github.com/yipjunkai/pyvolr/commit/6398f5ba1c46c6aa8a802b573baa9f729c966bf5))
+* **readme:** use absolute URLs for perf chart so PyPI renders it ([c26d1f6](https://github.com/yipjunkai/pyvolr/commit/c26d1f6a25e8bf932cd398756b3ee161b54d556c))
+
 ## [0.1.1](https://github.com/yipjunkai/pyvolr/compare/v0.1.0...v0.1.1) (2026-05-25)
 
 
