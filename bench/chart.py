@@ -24,10 +24,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # (n_options, pyvolr_microseconds, py_vollib_microseconds)
-# Refreshed post-LBR; produced by `python bench/compare_py_vollib.py`.
+# Refreshed post-LBR + cdf/erfcx perf work; produced by
+# `python bench/compare_py_vollib.py`.
 N = np.array([1, 1_000, 10_000, 100_000, 1_000_000])
-PV = np.array([4.2, 29.4, 189.6, 1_740.0, 17_550.0])
-PVOL = np.array([2.2, 2_350.0, 23_530.0, 235_600.0, 2_360_000.0])
+PV = np.array([4.1, 29.3, 187.8, 1_670.0, 17_460.0])
+PVOL = np.array([2.2, 2_320.0, 23_320.0, 234_910.0, 2_350_000.0])
 
 PV_COLOR = "#CE422B"  # rust orange
 PVOL_COLOR_LIGHT = "#6C757D"  # slate gray for light theme
