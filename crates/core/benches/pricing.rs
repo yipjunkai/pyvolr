@@ -85,7 +85,8 @@ fn bench_bsm_vega_vec(c: &mut Criterion) {
 }
 
 fn bench_iv_solve_scalar(c: &mut Criterion) {
-    // ATM, mid-vol — Newton converges quickly. The typical case.
+    // ATM, mid-vol — the "middle segment" (β ∈ [b_l, b_h]) of LBR, where the
+    // initial guess + Householder converges in ≤ 2 iterations.  Typical case.
     let target = bsm::price(bsm::Flag::Call, 100.0, 100.0, 0.5, 0.05, 0.0, 0.20);
     c.bench_function("iv_solve_scalar_atm", |b| {
         b.iter(|| {
@@ -101,8 +102,9 @@ fn bench_iv_solve_scalar(c: &mut Criterion) {
         });
     });
 
-    // OTM short expiry — exercises the bisection fallback path. Slower per
-    // call, so a regression here is the more diagnostic signal.
+    // OTM short expiry — small-t evaluator + lower-segment objective.  This
+    // is the slower of the two scalar bench rows; a regression here is the
+    // more diagnostic signal because it exercises more of LBR's machinery.
     let target_otm = bsm::price(bsm::Flag::Put, 100.0, 80.0, 0.05, 0.03, 0.01, 0.45);
     c.bench_function("iv_solve_scalar_otm_short", |b| {
         b.iter(|| {

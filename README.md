@@ -217,4 +217,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Particularly welcome: new pricing models
 
 Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option.
 
-Algorithms are reimplemented from published references (Hull, Merton, Manaster-Koehler); no third-party source code is incorporated.
+Algorithms are reimplemented from published references (Hull, Merton, Jäckel); no third-party source code is incorporated.

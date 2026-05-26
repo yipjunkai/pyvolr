@@ -228,4 +228,5 @@ class TestBlack76IvRoundtrip:
         assume(v > 1e-4 * max(1.0, f))
         iv = black76.implied_vol(p, fl, F=f, K=k, T=t, r=r)
         assume(not np.isnan(iv))
-        assert iv == pytest.approx(sigma, abs=1e-6)
+        # Same LBR machinery as BSM IV — see test_iv_recovers_sigma_when_well_conditioned.
+        assert iv == pytest.approx(sigma, rel=1e-12)
