@@ -562,7 +562,7 @@ mod lbr {
                 s_left = 0.0;
                 s_right = s_l;
                 householder_iter_lower(beta, x, &mut s, &mut s_left, &mut s_right);
-                return adjust_sign(s, q);
+                return s;
             }
             // Lower-middle segment: β ∈ [b_l, b_c).
             let v_l = normalised_black::vega(x, s_l);
@@ -606,13 +606,14 @@ mod lbr {
                 s_right = f64::MAX;
                 if beta > 0.5 * b_max {
                     householder_iter_upper(beta, x, b_max, &mut s, &mut s_left, &mut s_right);
-                    return adjust_sign(s, q);
+                    return s;
                 }
             }
         }
         // Middle segments use the direct objective g(s) = b(x,s) − β.
         householder_iter_middle(beta, x, &mut s, &mut s_left, &mut s_right);
-        adjust_sign(s, q)
+        let _ = q; // q is consumed by the put-call mapping above; σ is sign-free.
+        s
     }
 
     /// Iterate `g = ln(b)/ln(β) · ... ` form (lower segment, β tiny).
@@ -759,12 +760,6 @@ mod lbr {
         }
     }
 
-    /// We solved in the call-form (q=+1) for σ·√T.  Sign of σ doesn't depend
-    /// on flag; this just normalises the return.
-    #[inline]
-    fn adjust_sign(s: f64, _q: f64) -> f64 {
-        s
-    }
 }
 
 /// Solve for implied volatility given a market price.
