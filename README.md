@@ -24,20 +24,20 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
 
 | Scenario                      |   pyvolr | py_vollib | speedup |
 | ----------------------------- | -------: | --------: | ------: |
-| `bs.price`, scalar            |   4.0 µs |    2.0 µs |    0.5× |
-| `bs.price`, 1k strikes        |  25.4 µs |   2.16 ms |     85× |
-| `bs.price`, 10k strikes       |   157 µs |  21.73 ms |    139× |
-| `bs.price`, 100k strikes      |  1.48 ms | 217.53 ms |    147× |
-| `bs.price`, 1M strikes        | 15.18 ms |  2,204 ms |    145× |
-| `bs.greeks` (all 5), 10k      |   593 µs |  85.82 ms |    145× |
-| `bs.implied_vol`, scalar      |   3.9 µs |   13.9 µs |    3.6× |
-| `black76.price`, scalar       |   3.8 µs |    2.2 µs |    0.6× |
-| `black76.price`, 10k strikes  |   171 µs |  23.45 ms |    137× |
-| `black76.implied_vol`, scalar |   3.9 µs |   15.0 µs |    3.9× |
+| `bs.price`, scalar            |   4.1 µs |    2.2 µs |    0.5× |
+| `bs.price`, 1k strikes        |  29.3 µs |   2.32 ms |     79× |
+| `bs.price`, 10k strikes       |   188 µs |  23.32 ms |    124× |
+| `bs.price`, 100k strikes      |  1.67 ms | 234.91 ms |    141× |
+| `bs.price`, 1M strikes        | 17.46 ms |  2,350 ms |    135× |
+| `bs.greeks` (all 5), 10k      |   671 µs |  89.95 ms |    134× |
+| `bs.implied_vol`, scalar      |   4.4 µs |   15.0 µs |    3.4× |
+| `black76.price`, scalar       |   3.7 µs |    2.2 µs |    0.6× |
+| `black76.price`, 10k strikes  |   177 µs |  23.19 ms |    131× |
+| `black76.implied_vol`, scalar |   4.0 µs |   14.7 µs |    3.7× |
 
 Vectorize anything you can — that's where pyvolr wins. For a single scalar `price` call, py_vollib's pure-Python path edges out pyvolr because the PyO3 FFI roundtrip + numpy broadcasting setup costs a few microseconds; even a 2-element array call already favors pyvolr. Black-76's profile tracks BSM's exactly because the Rust core delegates to `bsm::price` with `q=r` rather than duplicating math.
 
-Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.0 vs py_vollib 1.0.1.
+Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.1 vs py_vollib 1.0.1.
 
 ## 📦 Install
 
