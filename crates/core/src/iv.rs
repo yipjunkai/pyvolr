@@ -759,7 +759,6 @@ mod lbr {
             *s += ds;
         }
     }
-
 }
 
 /// Solve for implied volatility given a market price.
