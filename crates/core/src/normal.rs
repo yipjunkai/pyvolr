@@ -14,9 +14,22 @@ const INV_SQRT_2PI: f64 = 0.398_942_280_401_432_7;
 const INV_SQRT_PI: f64 = 0.564_189_583_547_756_3;
 
 /// Standard normal CDF: `P(Z <= x)` for `Z ~ N(0, 1)`.
+///
+/// For `|x| <= 4` the direct `0.5·(1 + erf(x/√2))` formula has ~1 ULP accuracy.
+/// In the tails the `1 + erf` cancellation costs digits (`libm::erf` saturates
+/// at ±1 once `|x/√2| > ~5.93`), so we switch to the `erfcx` form
+/// `cdf(x) = 0.5·exp(-x²/2)·erfcx(|x|/√2)` (`x < 0`) or `1 - same` (`x > 0`),
+/// which retains full f64 precision down to `f64::MIN_POSITIVE` and beyond.
 #[inline]
 pub fn cdf(x: f64) -> f64 {
-    0.5 * (1.0 + libm::erf(x / SQRT_2))
+    if x.abs() < 4.0 {
+        return 0.5 * (1.0 + libm::erf(x / SQRT_2));
+    }
+    if x < 0.0 {
+        0.5 * (-0.5 * x * x).exp() * erfcx(-x / SQRT_2)
+    } else {
+        1.0 - 0.5 * (-0.5 * x * x).exp() * erfcx(x / SQRT_2)
+    }
 }
 
 /// Standard normal PDF: `(2 * pi)^(-1/2) * exp(-x^2 / 2)`.

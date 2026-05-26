@@ -28,10 +28,12 @@ class TestRoundtrip:
     def test_roundtrip(
         self, flag: str, s: float, k: float, t: float, r: float, q: float, sigma: float
     ) -> None:
+        # LBR converges to ~1e-14 relative; the limit at moderate moneyness is
+        # bsm price precision, not the solver. Tightened from 1e-6.
         p = bs.price(flag, S=s, K=k, T=t, r=r, sigma=sigma, q=q)
         iv = bs.implied_vol(p, flag, S=s, K=k, T=t, r=r, q=q)
         assert isinstance(iv, float)
-        assert iv == pytest.approx(sigma, abs=1e-6)
+        assert iv == pytest.approx(sigma, rel=1e-12)
 
 
 class TestBoundsHandling:
@@ -56,4 +58,4 @@ class TestVectorized:
         ivs = bs.implied_vol(prices, "c", S=100, K=100, T=0.5, r=0.05)
         assert isinstance(ivs, np.ndarray)
         assert ivs.shape == sigmas.shape
-        np.testing.assert_allclose(ivs, sigmas, atol=1e-6)
+        np.testing.assert_allclose(ivs, sigmas, rtol=1e-12)
