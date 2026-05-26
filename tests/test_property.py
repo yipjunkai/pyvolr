@@ -142,9 +142,9 @@ class TestIvRoundtrip:
         assume(not np.isnan(iv))
         # LBR converges to ~1e-13 IV precision at moderate moneyness, but
         # hypothesis's thorough profile finds deeper-ITM/OTM + high-vol corners
-        # where the IV-recovery drift is bounded by `vega · ε_b` and can reach
-        # ~5e-12 relative. 1e-10 is 10^4× tighter than the prior Newton bound
-        # (1e-6) and leaves headroom for those corners.
+        # where the IV-recovery drift is bounded by `vega * eps_b` and can
+        # reach ~5e-12 relative. 1e-10 is 10^4 tighter than the prior Newton
+        # bound (1e-6) and leaves headroom for those corners.
         assert iv == pytest.approx(sigma, rel=1e-10)
 
 

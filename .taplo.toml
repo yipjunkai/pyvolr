@@ -2,6 +2,7 @@
 # scope the scan to project files. taplo does NOT honor .gitignore.
 exclude = [
   ".venv/**",
+  ".venv-*/**",
   "target/**",
   "wheelhouse/**",
   "dist/**",

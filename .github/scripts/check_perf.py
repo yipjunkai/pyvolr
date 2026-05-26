@@ -29,20 +29,35 @@ from pathlib import Path
 # `<group>/<param>` under target/criterion/).
 #
 # LBR IV solver (Jäckel "Let's Be Rational") replaces the prior
-# Newton+bisection in PR feat/lbr-iv. Per-call work is intrinsically higher
-# — LBR evaluates a 4-region `b(x, s)` dispatcher and runs a bounded
-# Householder-4 iteration; Newton called a single `bsm::price` per iter and
-# stopped at 1e-10 absolute (~1e-6 IV). The tradeoff buys ~10^7 more IV
-# precision and bounded worst-case latency at the no-arbitrage boundary,
-# in exchange for ~30-55% higher average wall time on the bench grid:
-#   iv_solve_scalar_atm:        Newton ~195 ns -> LBR ~254 ns  (+30%)
-#   iv_solve_scalar_otm_short:  Newton ~510 ns -> LBR ~570 ns  (+12%)
-#   iv_solve_vec/10000:         Newton ~1.91 ms -> LBR ~2.95 ms (+54%)
-# Thresholds set ~20-30% above measured to absorb runner noise.
+# Newton+bisection in PR feat/lbr-iv.  Two sources of regression:
+#
+# (1) IV solver:  LBR evaluates a 4-region `b(x, s)` dispatcher and runs
+#     a bounded Householder-4 iteration; Newton called a single
+#     `bsm::price` per iter and stopped at 1e-10 absolute (~1e-6 IV).
+#     The tradeoff buys ~10^7 more IV precision and bounded worst-case
+#     latency at the no-arbitrage boundary.  Local measurements (Apple
+#     M4 Pro) showed +30-55%; GitHub-hosted Linux runners measure
+#     +73-78% on the same benches — slower libm, shared CPU.
+#
+# (2) Price/Greeks:  `normal::cdf` switches to an `erfcx`-based form for
+#     `|z| > 4` so `bsm::price` stays f64-accurate in the deep OTM tail
+#     (libm::erf saturates at +/-1 past z/sqrt(2) ≈ 5.93, which made the
+#     prior cdf lossy and broke LBR's lower-map roundtrip at extreme x).
+#     The added branch on the common path costs ~11-12% in `bsm_price_scalar`
+#     and `black76_price_scalar` on CI runners.  This is a deliberate
+#     precision-vs-speed tradeoff — without it, neither the LBR IV solver
+#     nor `bsm::price` itself can reach 1e-13 precision in the tails.
+#
+# Ceilings are set comfortably above the CI-measured worst case to absorb
+# day-to-day GitHub-runner noise.
 PER_BENCH_THRESHOLDS: dict[str, float] = {
-    "iv_solve_scalar_atm": 0.55,
+    # IV solver (intrinsically more work per call than Newton+bisection):
+    "iv_solve_scalar_atm": 0.90,
     "iv_solve_scalar_otm_short": 0.30,
-    "iv_solve_vec": 0.70,
+    "iv_solve_vec": 0.85,
+    # Price/Greek benches affected by the cdf erfcx-tail branch:
+    "bsm_price_scalar": 0.20,
+    "black76_price_scalar": 0.20,
 }
 
 
