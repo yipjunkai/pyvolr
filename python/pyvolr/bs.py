@@ -155,10 +155,14 @@ def implied_vol(
 ) -> _Result:
     """Solve for implied volatility given a market price.
 
+    Uses the Jäckel "Let's Be Rational" algorithm: converges to ~1e-13
+    precision in at most two Householder iterations across the full
+    no-arbitrage range.
+
     Returns NaN where:
       - the target price is outside the no-arbitrage bounds,
-      - `T <= 0`,
-      - the solver cannot bracket a root within `[1e-9, 5.0]`.
+      - `T <= 0`, `S <= 0`, or `K <= 0`,
+      - any input is non-finite.
     """
     flat, shape = broadcast_f64(price, S, K, T, r, q)
     flag_arr = normalize_flag(flag, shape).ravel()
