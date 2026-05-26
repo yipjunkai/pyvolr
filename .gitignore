@@ -317,3 +317,6 @@ fuzz/coverage/
 
 # Local-only working notes (not for commit)
 TODO.md
+
+# Bench result cache (machine-specific; reproducible via bench/compare_competitors.py bench)
+bench/.competitor_results.json
