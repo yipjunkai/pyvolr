@@ -383,6 +383,78 @@ fn bench_cdf_branch_experiment(c: &mut Criterion) {
     group.finish();
 }
 
+/// F5 investigation bench (audit/mechanical-sympathy): does the per-row
+/// `Flag::from_i8(flag[i])` + downstream `match flag` block optimisation
+/// of `bsm::price` in the `PyO3` dispatch loop?
+///
+/// **Verdict (2026-05, Apple M4 Pro): rejected.** Under `lto = "fat"` the
+/// compiler already collapses the FFI path: `uniform_call` and `uniform_put`
+/// run within ±0.5% of each other and within noise of the "compiler-knows-
+/// flag" baseline (`bsm_price_vec`). `interleaved` is ~3% slower, at the
+/// edge of the noise floor and uninteresting in production where strikes
+/// are typically smile-sorted (one flag uniform per call).
+///
+/// Structural reason: the inner kernel calls `libm::erf` (scalar, with
+/// internal branches — see F2 finding), so removing the flag match cannot
+/// enable cross-row auto-vectorisation. Upper bound on F5 headroom is the
+/// mispredict cost on interleaved inputs (~3%), which uniform inputs don't
+/// pay anyway. Not worth a specialised dispatch path.
+///
+/// `bsm_price_vec` above benches with a constant `bsm::Flag::Call` — the
+/// compiler can see the match's outcome and inline-prune. That's the
+/// "compiler-knows" optimum.
+///
+/// This bench mirrors the actual `PyO3` inner loop:
+/// ```ignore
+/// for i in 0..n {
+///     out.push(bsm::price(Flag::from_i8(flag[i]), s[i], ...));
+/// }
+/// ```
+///
+/// Three flag distributions:
+/// - `uniform_call`: flag[i] = +1 — branch perfectly predictable, but
+///   compiler doesn't know it statically.
+/// - `uniform_put`:  flag[i] = -1 — same, opposite arm.
+/// - `interleaved`:  flag[i] = ±1 alternating — pathological mispredict.
+fn bench_bsm_price_flag_dispatch(c: &mut Criterion) {
+    let strikes: Vec<f64> = (0..VEC_LEN)
+        .map(|i| 80.0 + 40.0 * (i as f64) / (VEC_LEN as f64))
+        .collect();
+    let uniform_call: Vec<i8> = vec![1; VEC_LEN];
+    let uniform_put: Vec<i8> = vec![-1; VEC_LEN];
+    let interleaved: Vec<i8> = (0..VEC_LEN)
+        .map(|i| if i % 2 == 0 { 1 } else { -1 })
+        .collect();
+
+    let cases: [(&str, &[i8]); 3] = [
+        ("uniform_call", &uniform_call),
+        ("uniform_put", &uniform_put),
+        ("interleaved", &interleaved),
+    ];
+    let mut group = c.benchmark_group("bsm_price_flag_dispatch");
+    group.throughput(Throughput::Elements(VEC_LEN as u64));
+    for (label, flags) in &cases {
+        group.bench_function(BenchmarkId::from_parameter(*label), |b| {
+            b.iter(|| {
+                let mut out = Vec::with_capacity(VEC_LEN);
+                for i in 0..VEC_LEN {
+                    out.push(bsm::price(
+                        bsm::Flag::from_i8(flags[i]),
+                        black_box(100.0),
+                        black_box(strikes[i]),
+                        black_box(0.5),
+                        black_box(0.05),
+                        black_box(0.0),
+                        black_box(0.20),
+                    ));
+                }
+                out
+            });
+        });
+    }
+    group.finish();
+}
+
 fn bench_black76_price_scalar(c: &mut Criterion) {
     c.bench_function("black76_price_scalar", |b| {
         b.iter(|| {
@@ -407,6 +479,7 @@ criterion_group!(
     bench_iv_solve_vec,
     bench_bsm_greeks_all_vec,
     bench_cdf_branch_experiment,
+    bench_bsm_price_flag_dispatch,
     bench_black76_price_scalar,
 );
 criterion_main!(benches);
