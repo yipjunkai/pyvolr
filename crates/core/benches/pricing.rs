@@ -13,9 +13,68 @@
 use std::hint::black_box;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use pyvolr_core::normal::erfcx;
 use pyvolr_core::{black76, bsm, greeks, iv};
 
 const VEC_LEN: usize = 10_000;
+const INV_SQRT_2: f64 = std::f64::consts::FRAC_1_SQRT_2;
+
+/// Experimental branchless `cdf`: always uses the `exp + erfcx` formulation,
+/// avoiding the `|x| < 4` data-dependent branch that `normal::cdf` takes.
+///
+/// The single `if x >= 0.0` left over compiles to a `csel` on aarch64 (a
+/// conditional move with no branch). The cost is ~50-70% more compute per
+/// call (one `erfcx` + one `exp` vs one `erf`), so branchless can only win
+/// if removing the `|x| < 4` branch produces an auto-vectorisation gain
+/// big enough to pay for the extra transcendentals. See
+/// `bench_cdf_branch_experiment` below for the measurement.
+fn cdf_branchless(x: f64) -> f64 {
+    let p = 0.5 * (-0.5 * x * x).exp() * erfcx(x.abs() * INV_SQRT_2);
+    if x >= 0.0 {
+        1.0 - p
+    } else {
+        p
+    }
+}
+
+/// Copy of `bsm::price`'s body with `cdf` replaced by `cdf_branchless`.
+/// Used only by `bench_cdf_branch_experiment`.
+fn bsm_price_branchless(
+    flag: bsm::Flag,
+    s: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    q: f64,
+    sigma: f64,
+) -> f64 {
+    if t <= 0.0 {
+        return match flag {
+            bsm::Flag::Call => (s - k).max(0.0),
+            bsm::Flag::Put => (k - s).max(0.0),
+        };
+    }
+    if sigma <= 0.0 {
+        let forward = s * ((r - q) * t).exp();
+        let disc_r = (-r * t).exp();
+        return disc_r
+            * match flag {
+                bsm::Flag::Call => (forward - k).max(0.0),
+                bsm::Flag::Put => (k - forward).max(0.0),
+            };
+    }
+    let (d1, d2) = bsm::d1_d2(s, k, t, r, q, sigma);
+    let disc_q = (-q * t).exp();
+    let disc_r = (-r * t).exp();
+    match flag {
+        bsm::Flag::Call => {
+            s * disc_q * cdf_branchless(d1) - k * disc_r * cdf_branchless(d2)
+        }
+        bsm::Flag::Put => {
+            k * disc_r * cdf_branchless(-d2) - s * disc_q * cdf_branchless(-d1)
+        }
+    }
+}
 
 fn bench_bsm_price_scalar(c: &mut Criterion) {
     c.bench_function("bsm_price_scalar", |b| {
@@ -248,6 +307,86 @@ fn bench_bsm_greeks_all_vec(c: &mut Criterion) {
     group.finish();
 }
 
+/// F2 investigation bench (audit/mechanical-sympathy): does removing the
+/// `|x| < 4` branch in `normal::cdf` help, hurt, or neither, when measured
+/// through `bsm::price`?
+///
+/// **Verdict (2026-05, Apple M4 Pro): rejected.** Branchless is 14-69%
+/// slower across all three input distributions below. `libm` is scalar
+/// with its own internal branches, so removing the outer `|x|<4` test
+/// does not enable auto-vectorisation; branchless just pays for two
+/// transcendentals (`erfcx`+`exp`) instead of one (`erf`) on every call.
+///
+/// Input distributions:
+/// - `narrow`: strikes 80..120 — d1 in [-1.0, +1.8], branch always taken,
+///   no mispredicts possible. Tests pure per-call overhead.
+/// - `wide`: strikes 20..200 — d1 in [-3.9, +11.6], one contiguous
+///   boundary crossing, still highly predictable.
+/// - `shuffled`: `wide` strikes in Knuth-multiplicative-permuted order.
+///   Worst case for the branch predictor.
+fn bench_cdf_branch_experiment(c: &mut Criterion) {
+    let narrow: Vec<f64> = (0..VEC_LEN)
+        .map(|i| 80.0 + 40.0 * (i as f64) / (VEC_LEN as f64))
+        .collect();
+    let wide: Vec<f64> = (0..VEC_LEN)
+        .map(|i| 20.0 + 180.0 * (i as f64) / (VEC_LEN as f64))
+        .collect();
+    // Deterministic permutation: i -> (i * 2654435769) mod VEC_LEN. The
+    // multiplier is coprime to 10000, so this visits each index exactly
+    // once in a hash-scrambled order. Reproducible across runs.
+    let shuffled: Vec<f64> = (0..VEC_LEN)
+        .map(|i| {
+            let j = (i.wrapping_mul(2_654_435_769)) % VEC_LEN;
+            wide[j]
+        })
+        .collect();
+
+    let cases: [(&str, &[f64]); 3] = [
+        ("narrow", &narrow),
+        ("wide", &wide),
+        ("shuffled", &shuffled),
+    ];
+    let mut group = c.benchmark_group("cdf_branch_experiment");
+    group.throughput(Throughput::Elements(VEC_LEN as u64));
+    for (label, strikes) in &cases {
+        group.bench_function(BenchmarkId::new("branched", *label), |b| {
+            b.iter(|| {
+                let mut out = Vec::with_capacity(VEC_LEN);
+                for &k in *strikes {
+                    out.push(bsm::price(
+                        bsm::Flag::Call,
+                        black_box(100.0),
+                        black_box(k),
+                        black_box(0.5),
+                        black_box(0.05),
+                        black_box(0.0),
+                        black_box(0.20),
+                    ));
+                }
+                out
+            });
+        });
+        group.bench_function(BenchmarkId::new("branchless", *label), |b| {
+            b.iter(|| {
+                let mut out = Vec::with_capacity(VEC_LEN);
+                for &k in *strikes {
+                    out.push(bsm_price_branchless(
+                        bsm::Flag::Call,
+                        black_box(100.0),
+                        black_box(k),
+                        black_box(0.5),
+                        black_box(0.05),
+                        black_box(0.0),
+                        black_box(0.20),
+                    ));
+                }
+                out
+            });
+        });
+    }
+    group.finish();
+}
+
 fn bench_black76_price_scalar(c: &mut Criterion) {
     c.bench_function("black76_price_scalar", |b| {
         b.iter(|| {
@@ -271,6 +410,7 @@ criterion_group!(
     bench_iv_solve_scalar,
     bench_iv_solve_vec,
     bench_bsm_greeks_all_vec,
+    bench_cdf_branch_experiment,
     bench_black76_price_scalar,
 );
 criterion_main!(benches);
