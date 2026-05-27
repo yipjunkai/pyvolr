@@ -103,21 +103,26 @@ mod normalised_black {
         b.max(0.0)
     }
 
-    /// `erfcx`-based evaluation:
-    /// `b = ½·exp(-½(h²+t²))·[erfcx(-(h+t)/√2) - erfcx(-(h-t)/√2)]`.
-    /// Accurate in the deep-OTM tail (Jäckel §3.1.4; Marsaglia 2004).
-    pub fn call_using_erfcx(h: f64, t: f64) -> f64 {
+    /// `erfcx`-based combined `b` and `vega` evaluation:
+    /// `b = ½·exp(-½(h²+t²))·[erfcx(-(h+t)/√2) - erfcx(-(h-t)/√2)]`,
+    /// `vega = (1/√(2π))·exp(-½(h²+t²))`.
+    /// Accurate in the deep-OTM tail (Jäckel §3.1.4; Marsaglia 2004). The
+    /// `exp(-½(h²+t²))` factor is shared between the two quantities.
+    fn call_and_vega_erfcx(h: f64, t: f64) -> (f64, f64) {
+        let raw_exp = (-0.5 * (h * h + t * t)).exp();
         let b = 0.5
-            * (-0.5 * (h * h + t * t)).exp()
+            * raw_exp
             * (erfcx(-ONE_OVER_SQRT_TWO * (h + t)) - erfcx(-ONE_OVER_SQRT_TWO * (h - t)));
-        b.max(0.0)
+        let v = ONE_OVER_SQRT_TWO_PI * raw_exp;
+        (b.max(0.0), v)
     }
 
-    /// Asymptotic-expansion region (very negative x, small t).  17-order
-    /// series in `q = (h/r)²` with `r = (h+t)(h-t)` and `e = (t/h)²`.
+    /// Asymptotic-expansion combined `b` and `vega` (very negative x, small t).
+    /// 17-order series in `q = (h/r)²` with `r = (h+t)(h-t)` and `e = (t/h)²`.
     /// Derived from A&S 26.2.12; truncation gives ~1.64e-16 relative for x ≤ -10.
+    /// Shares the `(1/√(2π))·exp(-½(h²+t²))` factor between the two quantities.
     #[allow(clippy::too_many_lines)]
-    pub fn call_using_asymptotic(h: f64, t: f64) -> f64 {
+    fn call_and_vega_asymptotic(h: f64, t: f64) -> (f64, f64) {
         let e = (t / h) * (t / h);
         let r = (h + t) * (h - t);
         let q = (h / r) * (h / r);
@@ -128,15 +133,17 @@ mod normalised_black {
         #[rustfmt::skip]
         #[allow(clippy::neg_multiply, clippy::unreadable_literal)]
         let asymp_sum: f64 = 2.0+q*(-6.0e0-2.0*e+3.0*q*(1.0e1+e*(2.0e1+2.0*e)+5.0*q*(-1.4e1+e*(-7.0e1+e*(-4.2e1-2.0*e))+7.0*q*(1.8e1+e*(1.68e2+e*(2.52e2+e*(7.2e1+2.0*e)))+9.0*q*(-2.2e1+e*(-3.3e2+e*(-9.24e2+e*(-6.6e2+e*(-1.1e2-2.0*e))))+1.1e1*q*(2.6e1+e*(5.72e2+e*(2.574e3+e*(3.432e3+e*(1.43e3+e*(1.56e2+2.0*e)))))+1.3e1*q*(-3.0e1+e*(-9.1e2+e*(-6.006e3+e*(-1.287e4+e*(-1.001e4+e*(-2.73e3+e*(-2.1e2-2.0*e))))))+1.5e1*q*(3.4e1+e*(1.36e3+e*(1.2376e4+e*(3.8896e4+e*(4.862e4+e*(2.4752e4+e*(4.76e3+e*(2.72e2+2.0*e)))))))+1.7e1*q*(-3.8e1+e*(-1.938e3+e*(-2.3256e4+e*(-1.00776e5+e*(-1.84756e5+e*(-1.51164e5+e*(-5.4264e4+e*(-7.752e3+e*(-3.42e2-2.0*e))))))))+1.9e1*q*(4.2e1+e*(2.66e3+e*(4.0698e4+e*(2.3256e5+e*(5.8786e5+e*(7.05432e5+e*(4.0698e5+e*(1.08528e5+e*(1.197e4+e*(4.2e2+2.0*e)))))))))+2.1e1*q*(-4.6e1+e*(-3.542e3+e*(-6.7298e4+e*(-4.90314e5+e*(-1.63438e6+e*(-2.704156e6+e*(-2.288132e6+e*(-9.80628e5+e*(-2.01894e5+e*(-1.771e4+e*(-5.06e2-2.0*e))))))))))+2.3e1*q*(5.0e1+e*(4.6e3+e*(1.0626e5+e*(9.614e5+e*(4.08595e6+e*(8.9148e6+e*(1.04006e7+e*(6.53752e6+e*(2.16315e6+e*(3.542e5+e*(2.53e4+e*(6.0e2+2.0*e)))))))))))+2.5e1*q*(-5.4e1+e*(-5.85e3+e*(-1.6146e5+e*(-1.77606e6+e*(-9.37365e6+e*(-2.607579e7+e*(-4.01166e7+e*(-3.476772e7+e*(-1.687257e7+e*(-4.44015e6+e*(-5.9202e5+e*(-3.51e4+e*(-7.02e2-2.0*e))))))))))))+2.7e1*q*(5.8e1+e*(7.308e3+e*(2.3751e5+e*(3.12156e6+e*(2.003001e7+e*(6.919458e7+e*(1.3572783e8+e*(1.5511752e8+e*(1.0379187e8+e*(4.006002e7+e*(8.58429e6+e*(9.5004e5+e*(4.7502e4+e*(8.12e2+2.0*e)))))))))))))+2.9e1*q*(-6.2e1+e*(-8.99e3+e*(-3.39822e5+e*(-5.25915e6+e*(-4.032015e7+e*(-1.6934463e8+e*(-4.1250615e8+e*(-6.0108039e8+e*(-5.3036505e8+e*(-2.8224105e8+e*(-8.870433e7+e*(-1.577745e7+e*(-1.472562e6+e*(-6.293e4+e*(-9.3e2-2.0*e))))))))))))))+3.1e1*q*(6.6e1+e*(1.0912e4+e*(4.74672e5+e*(8.544096e6+e*(7.71342e7+e*(3.8707344e8+e*(1.14633288e9+e*(2.07431664e9+e*(2.33360622e9+e*(1.6376184e9+e*(7.0963464e8+e*(1.8512208e8+e*(2.7768312e7+e*(2.215136e6+e*(8.184e4+e*(1.056e3+2.0*e)))))))))))))))+3.3e1*(-7.0e1+e*(-1.309e4+e*(-6.49264e5+e*(-1.344904e7+e*(-1.4121492e8+e*(-8.344518e8+e*(-2.9526756e9+e*(-6.49588632e9+e*(-9.0751353e9+e*(-8.1198579e9+e*(-4.6399188e9+e*(-1.6689036e9+e*(-3.67158792e8+e*(-4.707164e7+e*(-3.24632e6+e*(-1.0472e5+e*(-1.19e3-2.0*e)))))))))))))))))*q))))))))))))))));
-        let b = ONE_OVER_SQRT_TWO_PI * (-0.5 * (h * h + t * t)).exp() * (t / r) * asymp_sum;
-        b.max(0.0)
+        let phi = ONE_OVER_SQRT_TWO_PI * (-0.5 * (h * h + t * t)).exp();
+        let b = phi * (t / r) * asymp_sum;
+        (b.max(0.0), phi)
     }
 
-    /// Small-t expansion (Jäckel §3.1.3).  12th-order in t² of
-    /// `[Y(h+t) - Y(h-t)]` with `Y(z) = Φ(z)/φ(z)`.  Accurate to f64 precision
-    /// when `h ≤ 0` and `t < τ`.  The leading factor `a = 1 + h·Y(h)` is the
-    /// precision bottleneck for |h| > 1.
-    pub fn call_using_small_t(h: f64, t: f64) -> f64 {
+    /// Small-t combined `b` and `vega` (Jäckel §3.1.3). 12th-order in t² of
+    /// `[Y(h+t) - Y(h-t)]` with `Y(z) = Φ(z)/φ(z)`. Accurate to f64 precision
+    /// when `h ≤ 0` and `t < τ`. The leading factor `a = 1 + h·Y(h)` is the
+    /// precision bottleneck for |h| > 1. Shares the `(1/√(2π))·exp(-½(h²+t²))`
+    /// factor between the two quantities.
+    fn call_and_vega_small_t(h: f64, t: f64) -> (f64, f64) {
         const SQRT_TWO_PI: f64 = 2.506_628_274_631_000_5;
         let a = 1.0 + h * (0.5 * SQRT_TWO_PI) * erfcx(-ONE_OVER_SQRT_TWO * h);
         let w = t * t;
@@ -184,42 +191,56 @@ mod normalised_black {
                                                             + a * h2))))))
                                         * w)
                                         / 6_227_020_800.0))))));
-        let b = ONE_OVER_SQRT_TWO_PI * (-0.5 * (h * h + t * t)).exp() * exp;
-        b.max(0.0)
+        let phi = ONE_OVER_SQRT_TWO_PI * (-0.5 * (h * h + t * t)).exp();
+        let b = phi * exp;
+        (b.max(0.0), phi)
     }
 
-    /// Region dispatcher: returns `b(x, s)` for any sign of `x`.
-    ///
-    /// For ITM (x > 0), reflects via call-put symmetry: `b(x,s) = intrinsic(x,+1) + b(-x,s)`.
-    /// The four OTM regions are dispatched by the conditions in Jäckel §3.1
-    /// (avoiding divisions by `s` so the comparisons stay well-conditioned
-    /// near `s = 0`).
+    /// Thin `b`-only wrapper over [`call_and_vega`]. Retained for test
+    /// ergonomics (mpmath goldens, finite-difference vega checks) where
+    /// only `b` is needed. Production LBR routes through `call_and_vega`.
+    #[cfg(test)]
     pub fn call(x: f64, s: f64) -> f64 {
+        call_and_vega(x, s).0
+    }
+
+    /// Combined `b(x, s)` and `∂b/∂s = vega(x, s)` evaluated together.
+    ///
+    /// In three of the four regions (asymptotic, small-t, erfcx) the
+    /// `(1/√(2π))·exp(-½(h²+t²))` factor appears in both quantities; this
+    /// dispatcher routes through the `call_and_vega_*` variants so the
+    /// `exp` is computed once per call instead of twice. Region 3
+    /// (`call_using_norm_cdf`) uses `exp(x/2)` instead of the symmetric
+    /// factor, so b and vega are computed independently there.
+    ///
+    /// Used by the LBR Householder iteration where every step needs both.
+    pub fn call_and_vega(x: f64, s: f64) -> (f64, f64) {
         if x > 0.0 {
-            return intrinsic(x, 1.0) + call(-x, s);
+            // Call-put symmetry. Vega is symmetric in x (`vega(x,s) = vega(-x,s)`).
+            let (b_neg, v) = call_and_vega(-x, s);
+            return (intrinsic(x, 1.0) + b_neg, v);
         }
         if s <= 0.0 {
-            return intrinsic(x, 1.0);
+            return (intrinsic(x, 1.0), 0.0);
         }
         // Region 1: very negative x, small t — asymptotic series.
-        //   |h| > |η|, i.e., h < η     and     t < τ + |h| - |η|
-        // expressed without dividing by s.
         if x < s * ASYMPTOTIC_EXPANSION_THRESHOLD
             && 0.5 * s * s + x < s * (SMALL_T_THRESHOLD + ASYMPTOTIC_EXPANSION_THRESHOLD)
         {
-            return call_using_asymptotic(x / s, 0.5 * s);
+            return call_and_vega_asymptotic(x / s, 0.5 * s);
         }
         // Region 2: small t — short-expiry / low-vol series.
         if 0.5 * s < SMALL_T_THRESHOLD {
-            return call_using_small_t(x / s, 0.5 * s);
+            return call_and_vega_small_t(x / s, 0.5 * s);
         }
-        // Region 3: b dominated by first term — direct Φ evaluation.
-        //   h + t > 0.85   <=>   x + s²/2 > 0.85·s
+        // Region 3: b dominated by first term — direct Φ evaluation. The
+        // cdf form uses `exp(x/2)` rather than `exp(-½(h²+t²))`, so b and
+        // vega share no factor here. Fall back to the two-call form.
         if x + 0.5 * s * s > s * 0.85 {
-            return call_using_norm_cdf(x, s);
+            return (call_using_norm_cdf(x, s), vega(x, s));
         }
         // Region 4: default OTM tail — erfcx.
-        call_using_erfcx(x / s, 0.5 * s)
+        call_and_vega_erfcx(x / s, 0.5 * s)
     }
 }
 
@@ -536,15 +557,17 @@ mod lbr {
         //   s_l = s_c - b_c/v_c  (one Newton step from s_c with slope v_c, towards 0)
         //   s_h = s_c + (b_max - b_c)/v_c
         let s_c = (2.0 * x.abs()).sqrt();
-        let b_c = normalised_black::call(x, s_c);
-        let v_c = normalised_black::vega(x, s_c);
+        let (b_c, v_c) = normalised_black::call_and_vega(x, s_c);
 
         let (mut s, mut s_left, mut s_right);
 
         if beta < b_c {
             // Lower half: β ∈ (0, b_c).
             let s_l = s_c - b_c / v_c;
-            let b_l = normalised_black::call(x, s_l);
+            // `v_l` is only needed in the else branch below, but computing it
+            // up-front via `call_and_vega` shares the exp factor with `b_l`
+            // for one fewer transcendental per IV solve in this region.
+            let (b_l, v_l) = normalised_black::call_and_vega(x, s_l);
             if beta < b_l {
                 // Lowest segment: β ∈ (0, b_l).  Rational-cubic in the
                 // lower-map space.
@@ -564,8 +587,7 @@ mod lbr {
                 householder_iter_lower(beta, x, &mut s, &mut s_left, &mut s_right);
                 return s;
             }
-            // Lower-middle segment: β ∈ [b_l, b_c).
-            let v_l = normalised_black::vega(x, s_l);
+            // Lower-middle segment: β ∈ [b_l, b_c). `v_l` was computed alongside `b_l` above.
             let r_lm = convex_control_right(b_l, b_c, s_l, s_c, 1.0 / v_l, 1.0 / v_c, 0.0, false);
             s = rational_cubic(beta, b_l, b_c, s_l, s_c, 1.0 / v_l, 1.0 / v_c, r_lm);
             s_left = s_l;
@@ -577,10 +599,10 @@ mod lbr {
             } else {
                 s_c
             };
-            let b_h = normalised_black::call(x, s_h);
+            // Same shared-exp argument as `s_l` above: compute `v_h` alongside `b_h`.
+            let (b_h, v_h) = normalised_black::call_and_vega(x, s_h);
             if beta <= b_h {
                 // Upper-middle segment: β ∈ [b_c, b_h].
-                let v_h = normalised_black::vega(x, s_h);
                 let r_hm =
                     convex_control_left(b_c, b_h, s_c, s_h, 1.0 / v_c, 1.0 / v_h, 0.0, false);
                 s = rational_cubic(beta, b_c, b_h, s_c, s_h, 1.0 / v_c, 1.0 / v_h, r_hm);
@@ -637,8 +659,7 @@ mod lbr {
                 ds = 0.0;
             }
             ds_prev = ds;
-            let b = normalised_black::call(x, *s);
-            let bp = normalised_black::vega(x, *s);
+            let (b, bp) = normalised_black::call_and_vega(x, *s);
             if b > beta && *s < *s_right {
                 *s_right = *s;
             } else if b < beta && *s > *s_left {
@@ -692,8 +713,7 @@ mod lbr {
                 ds = 0.0;
             }
             ds_prev = ds;
-            let b = normalised_black::call(x, *s);
-            let bp = normalised_black::vega(x, *s);
+            let (b, bp) = normalised_black::call_and_vega(x, *s);
             if b > beta && *s < *s_right {
                 *s_right = *s;
             } else if b < beta && *s > *s_left {
@@ -744,8 +764,7 @@ mod lbr {
                 ds = 0.0;
             }
             ds_prev = ds;
-            let b = normalised_black::call(x, *s);
-            let bp = normalised_black::vega(x, *s);
+            let (b, bp) = normalised_black::call_and_vega(x, *s);
             if b > beta && *s < *s_right {
                 *s_right = *s;
             } else if b < beta && *s > *s_left {
@@ -967,6 +986,42 @@ mod normalised_black_tests {
         // OTM (q·x ≤ 0) must be exactly zero.
         assert_eq!(normalised_black::intrinsic(-0.5, 1.0), 0.0);
         assert_eq!(normalised_black::intrinsic(0.5, -1.0), 0.0);
+    }
+
+    /// Drift guard: `call_and_vega(x, s)` must match `(call(x, s), vega(x, s))`
+    /// across all four regions of the LBR dispatch. `b` is bit-identical
+    /// (both paths share the same expression). `vega` allows up to a few
+    /// ULPs of drift because the standalone `vega` evaluates the exp
+    /// argument via `mul_add` while the per-region helpers use a plain
+    /// `h*h + t*t` (the regions disagreed with the standalone vega by
+    /// 1-2 ULPs pre-refactor too — that's not new behaviour, just a
+    /// pre-existing inconsistency this test now surfaces). 1e-14 is four
+    /// orders of magnitude tighter than the IV roundtrip tolerance.
+    #[test]
+    fn call_and_vega_matches_separate() {
+        // Cases drawn from each region of the four-way dispatch.
+        let cases: &[(&str, f64, f64)] = &[
+            ("r1_deep_asymp", -1.1, 0.1),
+            ("r1_deeper", -1.5, 0.1),
+            ("r2_small_t_atm", 0.0, 0.02),
+            ("r2_small_t_otm", -0.095_310_179_8, 0.02),
+            ("r3_atm_high_vol", 0.0, 2.0),
+            ("r3_itm_call", 0.5, 0.2),
+            ("r4_moderate_otm", -0.1, 0.2),
+            ("r4_otm_high", -0.5, 0.4),
+            ("r4_otm_long_t", -0.5, 2.0),
+            ("itm_call_high_vol", 1.0, 0.5),
+        ];
+        for &(label, x, s) in cases {
+            let (b_combined, v_combined) = normalised_black::call_and_vega(x, s);
+            let b_sep = normalised_black::call(x, s);
+            let v_sep = normalised_black::vega(x, s);
+            // `b` is bit-identical (same expression on both sides).
+            assert_relative_eq!(b_combined, b_sep, max_relative = 1e-15, epsilon = 1e-300);
+            // `vega` allows 1-2 ULPs of pre-existing FMA-vs-plain drift.
+            assert_relative_eq!(v_combined, v_sep, max_relative = 1e-14, epsilon = 1e-300);
+            let _ = label;
+        }
     }
 
     #[test]
