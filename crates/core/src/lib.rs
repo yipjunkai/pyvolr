@@ -15,8 +15,21 @@ pub mod normal;
 use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use rayon::prelude::*;
 
 use crate::bsm::Flag;
+
+/// Above this batch size, the IV solver dispatches per-row work to rayon's
+/// global thread pool (after releasing the GIL). Below it, the call stays
+/// serial — rayon's per-call setup overhead (~45 µs on Apple M4 Pro) only
+/// amortises against per-row IV cost (~280 ns) above this threshold, with
+/// a comfortable margin for run-to-run noise. Bench data: F4 experiment
+/// in `crates/core/benches/pricing.rs`.
+///
+/// Set `RAYON_NUM_THREADS=1` in the environment to disable parallelism
+/// entirely (useful when pyvolr is called from inside a caller-managed
+/// thread pool that already saturates the cores).
+const PARALLEL_THRESHOLD: usize = 1024;
 
 /// Return type of `bsm_greeks` / `black76_greeks`: `(delta, gamma, vega, theta, rho)`.
 type GreeksTuple<'py> = (
@@ -207,19 +220,22 @@ fn black76_iv<'py>(
         r.len(),
     ])?;
     // Black-76 IV: reuse the BSM solver with q = r (the Black-76 specialization).
-    let out: Vec<f64> = (0..n)
-        .map(|i| {
-            iv::solve(
-                target_price[i],
-                Flag::from_i8(flag[i]),
-                f[i],
-                k[i],
-                t[i],
-                r[i],
-                r[i],
-            )
-        })
-        .collect();
+    let solve_at = |i: usize| {
+        iv::solve(
+            target_price[i],
+            Flag::from_i8(flag[i]),
+            f[i],
+            k[i],
+            t[i],
+            r[i],
+            r[i],
+        )
+    };
+    let out: Vec<f64> = if n >= PARALLEL_THRESHOLD {
+        py.detach(|| (0..n).into_par_iter().map(solve_at).collect())
+    } else {
+        (0..n).map(solve_at).collect()
+    };
     Ok(out.into_pyarray(py))
 }
 
@@ -357,19 +373,22 @@ fn bsm_iv<'py>(
         r.len(),
         q.len(),
     ])?;
-    let out: Vec<f64> = (0..n)
-        .map(|i| {
-            iv::solve(
-                target_price[i],
-                Flag::from_i8(flag[i]),
-                s[i],
-                k[i],
-                t[i],
-                r[i],
-                q[i],
-            )
-        })
-        .collect();
+    let solve_at = |i: usize| {
+        iv::solve(
+            target_price[i],
+            Flag::from_i8(flag[i]),
+            s[i],
+            k[i],
+            t[i],
+            r[i],
+            q[i],
+        )
+    };
+    let out: Vec<f64> = if n >= PARALLEL_THRESHOLD {
+        py.detach(|| (0..n).into_par_iter().map(solve_at).collect())
+    } else {
+        (0..n).map(solve_at).collect()
+    };
     Ok(out.into_pyarray(py))
 }
 

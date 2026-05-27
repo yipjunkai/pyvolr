@@ -15,6 +15,7 @@ use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use pyvolr_core::normal::erfcx;
 use pyvolr_core::{black76, bsm, greeks, iv};
+use rayon::prelude::*;
 
 const VEC_LEN: usize = 10_000;
 const INV_SQRT_2: f64 = std::f64::consts::FRAC_1_SQRT_2;
@@ -455,6 +456,120 @@ fn bench_bsm_price_flag_dispatch(c: &mut Criterion) {
     group.finish();
 }
 
+/// F4 investigation bench (audit/mechanical-sympathy): does rayon
+/// parallelisation of the `PyO3` outer loop produce a meaningful win, and
+/// at what `N` does it start to pay (vs rayon's per-call overhead)?
+///
+/// Each arm runs the inner loop of the production `PyO3` macro — collect
+/// `N` calls of either `bsm::price` or `iv::solve` into a `Vec<f64>` —
+/// once serial, once via `(0..N).into_par_iter()`. The same `(s, k, ...)`
+/// inputs are used in both arms so the only variable is scheduling.
+///
+/// Parameterised over `N ∈ {100, 1_000, 10_000, 100_000}` so we can see:
+/// (a) the per-row cost vs rayon overhead break-even point, and
+/// (b) the N-core saturation ceiling at large N.
+fn bench_parallel_dispatch_experiment(c: &mut Criterion) {
+    let sizes: [usize; 4] = [100, 1_000, 10_000, 100_000];
+
+    // bsm::price arm — ~14ns/row, lowest per-row cost in the suite.
+    let mut price_group = c.benchmark_group("parallel/bsm_price");
+    for &n in &sizes {
+        let strikes: Vec<f64> = (0..n)
+            .map(|i| 80.0 + 40.0 * (i as f64) / (n as f64))
+            .collect();
+        price_group.throughput(Throughput::Elements(n as u64));
+        price_group.bench_function(BenchmarkId::new("serial", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .map(|i| {
+                        bsm::price(
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                            black_box(0.20),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+        price_group.bench_function(BenchmarkId::new("rayon", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .into_par_iter()
+                    .map(|i| {
+                        bsm::price(
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                            black_box(0.20),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+    }
+    price_group.finish();
+
+    // iv::solve arm — ~280ns/row, highest per-row cost; most likely to win.
+    let mut iv_group = c.benchmark_group("parallel/iv_solve");
+    for &n in &sizes {
+        let strikes: Vec<f64> = (0..n)
+            .map(|i| 80.0 + 40.0 * (i as f64) / (n as f64))
+            .collect();
+        let targets: Vec<f64> = strikes
+            .iter()
+            .map(|&k| bsm::price(bsm::Flag::Call, 100.0, k, 0.5, 0.05, 0.0, 0.20))
+            .collect();
+        iv_group.throughput(Throughput::Elements(n as u64));
+        iv_group.bench_function(BenchmarkId::new("serial", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .map(|i| {
+                        iv::solve(
+                            black_box(targets[i]),
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+        iv_group.bench_function(BenchmarkId::new("rayon", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .into_par_iter()
+                    .map(|i| {
+                        iv::solve(
+                            black_box(targets[i]),
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+    }
+    iv_group.finish();
+}
+
 fn bench_black76_price_scalar(c: &mut Criterion) {
     c.bench_function("black76_price_scalar", |b| {
         b.iter(|| {
@@ -480,6 +595,7 @@ criterion_group!(
     bench_bsm_greeks_all_vec,
     bench_cdf_branch_experiment,
     bench_bsm_price_flag_dispatch,
+    bench_parallel_dispatch_experiment,
     bench_black76_price_scalar,
 );
 criterion_main!(benches);

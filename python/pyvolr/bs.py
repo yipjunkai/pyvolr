@@ -159,6 +159,11 @@ def implied_vol(
     precision in at most two Householder iterations across the full
     no-arbitrage range.
 
+    Batches of ~1000 rows or more run on rayon's global thread pool with
+    the GIL released. Set ``RAYON_NUM_THREADS=1`` in the environment to
+    force serial execution — useful when calling pyvolr from inside a
+    caller-managed thread pool that already saturates the cores.
+
     Returns NaN where:
       - the target price is outside the no-arbitrage bounds,
       - `T <= 0`, `S <= 0`, or `K <= 0`,

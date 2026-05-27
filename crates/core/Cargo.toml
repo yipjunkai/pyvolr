@@ -26,6 +26,11 @@ crate-type = ["cdylib", "rlib"]
 pyo3 = { version = "0.28", features = ["abi3-py310"] }
 numpy = "0.28"
 libm = "0.2"
+# IV vectorised dispatch uses rayon's global thread pool above an
+# `n >= PARALLEL_THRESHOLD` gate; small calls stay serial to avoid pool
+# spin-up overhead. Pool size follows `RAYON_NUM_THREADS` (set to `1` to
+# opt out of parallelism entirely).
+rayon = "1.10"
 # ndarray is pulled in transitively by numpy and managed at numpy's chosen
 # version. Adding it directly here is only necessary when we use ndarray::Array,
 # ArrayView, etc. in Rust source.
