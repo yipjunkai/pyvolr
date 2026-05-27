@@ -86,6 +86,63 @@ pub fn rho(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f6
     }
 }
 
+/// Compute all five Greeks in a single pass, sharing the `d1_d2`, `disc_q`,
+/// `disc_r`, `cdf`, and `pdf` evaluations that would otherwise be repeated
+/// across `delta`/`gamma`/`vega`/`theta`/`rho`. Returns `(delta, gamma, vega,
+/// theta, rho)`. Numerically identical to calling the per-Greek functions
+/// individually (verified by `tests::all_matches_individual_*`).
+pub fn all(
+    flag: Flag,
+    s: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    q: f64,
+    sigma: f64,
+) -> (f64, f64, f64, f64, f64) {
+    // Degenerate regime: delta has a non-zero limiting step; all others vanish.
+    // Defer to `delta` so the textbook step value (`±disc_q` ITM, `0` OTM) is
+    // computed in exactly one place.
+    if t <= 0.0 || sigma <= 0.0 {
+        return (delta(flag, s, k, t, r, q, sigma), 0.0, 0.0, 0.0, 0.0);
+    }
+    let (d1, d2) = d1_d2(s, k, t, r, q, sigma);
+    let sqrt_t = t.sqrt();
+    let disc_q = (-q * t).exp();
+    let disc_r = (-r * t).exp();
+    let pd1 = pdf(d1);
+    let nd1 = cdf(d1);
+    let nd2 = cdf(d2);
+
+    let (delta_v, theta_v, rho_v) = match flag {
+        Flag::Call => {
+            let common = -s * disc_q * pd1 * sigma / (2.0 * sqrt_t);
+            (
+                disc_q * nd1,
+                common - r * k * disc_r * nd2 + q * s * disc_q * nd1,
+                k * t * disc_r * nd2,
+            )
+        }
+        Flag::Put => {
+            // Put theta/rho reference `cdf(-d1)`/`cdf(-d2)` directly so the
+            // `erfcx`-tail branch handles deep-ITM puts without precision loss.
+            // Put delta intentionally uses `cdf(d1) - 1.0` to match the existing
+            // scalar `delta` formula exactly (a separate precision issue).
+            let neg_nd1 = cdf(-d1);
+            let neg_nd2 = cdf(-d2);
+            let common = -s * disc_q * pd1 * sigma / (2.0 * sqrt_t);
+            (
+                disc_q * (nd1 - 1.0),
+                common + r * k * disc_r * neg_nd2 - q * s * disc_q * neg_nd1,
+                -k * t * disc_r * neg_nd2,
+            )
+        }
+    };
+    let gamma_v = disc_q * pd1 / (s * sigma * sqrt_t);
+    let vega_v = s * disc_q * pd1 * sqrt_t;
+    (delta_v, gamma_v, vega_v, theta_v, rho_v)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,5 +208,59 @@ mod tests {
         let analytical = theta(Flag::Call, s, k, t, r, q, sigma);
         let fd = finite_diff(|x| price(Flag::Call, s, k, x, r, q, sigma), t, 1e-5);
         assert_relative_eq!(analytical, -fd, epsilon = 1e-5);
+    }
+
+    /// Drift guard: `all()` must agree with the per-Greek functions bit-for-bit
+    /// across both option flags, including the t<=0 / sigma<=0 degenerate paths.
+    /// Tolerances are tight (relative 0 or 1e-15) because `all()` shares the
+    /// same subexpressions, so floating-point rounding lines up exactly.
+    #[test]
+    fn all_matches_individual_at_grid() {
+        let grid: &[(f64, f64, f64, f64, f64, f64)] = &[
+            (100.0, 100.0, 1.0, 0.05, 0.0, 0.20),
+            (100.0, 105.0, 0.5, 0.05, 0.02, 0.25),
+            (100.0, 80.0, 0.05, 0.03, 0.01, 0.45),
+            (100.0, 200.0, 0.5, 0.05, 0.0, 0.30), // deep OTM call
+            (1000.0, 100.0, 0.01, 0.05, 0.0, 0.20), // deep ITM call
+        ];
+        for &(s, k, t, r, q, sigma) in grid {
+            for &flag in &[Flag::Call, Flag::Put] {
+                let (d, g, v, th, rh) = all(flag, s, k, t, r, q, sigma);
+                assert_relative_eq!(
+                    d,
+                    delta(flag, s, k, t, r, q, sigma),
+                    max_relative = 1e-15
+                );
+                assert_relative_eq!(g, gamma(s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(v, vega(s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(
+                    th,
+                    theta(flag, s, k, t, r, q, sigma),
+                    max_relative = 1e-15
+                );
+                assert_relative_eq!(rh, rho(flag, s, k, t, r, q, sigma), max_relative = 1e-15);
+            }
+        }
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn all_matches_individual_degenerate() {
+        // t == 0 and sigma == 0 paths.
+        let degenerate: &[(f64, f64, f64, f64, f64, f64)] = &[
+            (110.0, 100.0, 0.0, 0.05, 0.0, 0.20), // t = 0, ITM call
+            (90.0, 100.0, 0.0, 0.05, 0.0, 0.20),  // t = 0, OTM call / ITM put
+            (100.0, 100.0, 1.0, 0.05, 0.0, 0.0),  // sigma = 0
+        ];
+        for &(s, k, t, r, q, sigma) in degenerate {
+            for &flag in &[Flag::Call, Flag::Put] {
+                let (d, g, v, th, rh) = all(flag, s, k, t, r, q, sigma);
+                assert_eq!(d, delta(flag, s, k, t, r, q, sigma));
+                assert_eq!(g, gamma(s, k, t, r, q, sigma));
+                assert_eq!(v, vega(s, k, t, r, q, sigma));
+                assert_eq!(th, theta(flag, s, k, t, r, q, sigma));
+                assert_eq!(rh, rho(flag, s, k, t, r, q, sigma));
+            }
+        }
     }
 }

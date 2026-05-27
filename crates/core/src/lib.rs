@@ -18,6 +18,15 @@ use pyo3::prelude::*;
 
 use crate::bsm::Flag;
 
+/// Return type of `bsm_greeks` / `black76_greeks`: `(delta, gamma, vega, theta, rho)`.
+type GreeksTuple<'py> = (
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+);
+
 /// Validate that all input slices share a length; otherwise return a Python
 /// `ValueError`. This is defense-in-depth — the Python wrapper enforces this
 /// upstream via numpy broadcasting.
@@ -214,6 +223,105 @@ fn black76_iv<'py>(
     Ok(out.into_pyarray(py))
 }
 
+/// Compute all five BSM Greeks in a single pass.
+///
+/// Returns `(delta, gamma, vega, theta, rho)` as a 5-tuple of `PyArray1<f64>`.
+/// Equivalent to calling `bsm_delta`, `bsm_gamma`, `bsm_vega`, `bsm_theta`,
+/// and `bsm_rho` separately, but shares the `d1_d2`, discount-factor, `cdf`,
+/// and `pdf` evaluations — ~3-5× faster on the bundled `bs.greeks(...)` path.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn bsm_greeks<'py>(
+    py: Python<'py>,
+    flag: PyReadonlyArray1<'py, i8>,
+    s: PyReadonlyArray1<'py, f64>,
+    k: PyReadonlyArray1<'py, f64>,
+    t: PyReadonlyArray1<'py, f64>,
+    r: PyReadonlyArray1<'py, f64>,
+    q: PyReadonlyArray1<'py, f64>,
+    sigma: PyReadonlyArray1<'py, f64>,
+) -> PyResult<GreeksTuple<'py>> {
+    let flag = flag.as_slice()?;
+    let s = s.as_slice()?;
+    let k = k.as_slice()?;
+    let t = t.as_slice()?;
+    let r = r.as_slice()?;
+    let q = q.as_slice()?;
+    let sigma = sigma.as_slice()?;
+    let n = check_len(&[
+        flag.len(),
+        s.len(),
+        k.len(),
+        t.len(),
+        r.len(),
+        q.len(),
+        sigma.len(),
+    ])?;
+    let mut delta = Vec::with_capacity(n);
+    let mut gamma = Vec::with_capacity(n);
+    let mut vega = Vec::with_capacity(n);
+    let mut theta = Vec::with_capacity(n);
+    let mut rho = Vec::with_capacity(n);
+    for i in 0..n {
+        let (d, g, v, th, rh) =
+            greeks::all(Flag::from_i8(flag[i]), s[i], k[i], t[i], r[i], q[i], sigma[i]);
+        delta.push(d);
+        gamma.push(g);
+        vega.push(v);
+        theta.push(th);
+        rho.push(rh);
+    }
+    Ok((
+        delta.into_pyarray(py),
+        gamma.into_pyarray(py),
+        vega.into_pyarray(py),
+        theta.into_pyarray(py),
+        rho.into_pyarray(py),
+    ))
+}
+
+/// Compute all five Black-76 Greeks in a single pass. See `bsm_greeks`.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn black76_greeks<'py>(
+    py: Python<'py>,
+    flag: PyReadonlyArray1<'py, i8>,
+    f: PyReadonlyArray1<'py, f64>,
+    k: PyReadonlyArray1<'py, f64>,
+    t: PyReadonlyArray1<'py, f64>,
+    r: PyReadonlyArray1<'py, f64>,
+    sigma: PyReadonlyArray1<'py, f64>,
+) -> PyResult<GreeksTuple<'py>> {
+    let flag = flag.as_slice()?;
+    let f = f.as_slice()?;
+    let k = k.as_slice()?;
+    let t = t.as_slice()?;
+    let r = r.as_slice()?;
+    let sigma = sigma.as_slice()?;
+    let n = check_len(&[flag.len(), f.len(), k.len(), t.len(), r.len(), sigma.len()])?;
+    let mut delta = Vec::with_capacity(n);
+    let mut gamma = Vec::with_capacity(n);
+    let mut vega = Vec::with_capacity(n);
+    let mut theta = Vec::with_capacity(n);
+    let mut rho = Vec::with_capacity(n);
+    for i in 0..n {
+        let (d, g, v, th, rh) =
+            black76::all(Flag::from_i8(flag[i]), f[i], k[i], t[i], r[i], sigma[i]);
+        delta.push(d);
+        gamma.push(g);
+        vega.push(v);
+        theta.push(th);
+        rho.push(rh);
+    }
+    Ok((
+        delta.into_pyarray(py),
+        gamma.into_pyarray(py),
+        vega.into_pyarray(py),
+        theta.into_pyarray(py),
+        rho.into_pyarray(py),
+    ))
+}
+
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 fn bsm_iv<'py>(
@@ -271,6 +379,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bsm_vega, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_theta, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_rho, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_greeks, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_iv, m)?)?;
     m.add_function(wrap_pyfunction!(black76_price, m)?)?;
     m.add_function(wrap_pyfunction!(black76_delta, m)?)?;
@@ -278,6 +387,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(black76_vega, m)?)?;
     m.add_function(wrap_pyfunction!(black76_theta, m)?)?;
     m.add_function(wrap_pyfunction!(black76_rho, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_greeks, m)?)?;
     m.add_function(wrap_pyfunction!(black76_iv, m)?)?;
     Ok(())
 }

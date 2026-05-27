@@ -151,6 +151,103 @@ fn bench_iv_solve_vec(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_bsm_greeks_all_vec(c: &mut Criterion) {
+    // Locks in the F1 (combined-greeks) win: `greeks::all` shares d1_d2 /
+    // disc_q / disc_r / cdf / pdf across all five Greeks, eliminating the
+    // ~80% redundancy of calling delta+gamma+vega+theta+rho separately.
+    let strikes: Vec<f64> = (0..VEC_LEN)
+        .map(|i| 80.0 + 40.0 * (i as f64) / (VEC_LEN as f64))
+        .collect();
+    let mut group = c.benchmark_group("bsm_greeks_all_vec");
+    group.throughput(Throughput::Elements(VEC_LEN as u64));
+    group.bench_function(BenchmarkId::new("combined", VEC_LEN), |b| {
+        b.iter(|| {
+            let mut d = Vec::with_capacity(VEC_LEN);
+            let mut g = Vec::with_capacity(VEC_LEN);
+            let mut v = Vec::with_capacity(VEC_LEN);
+            let mut th = Vec::with_capacity(VEC_LEN);
+            let mut rh = Vec::with_capacity(VEC_LEN);
+            for &k in &strikes {
+                let (a, b2, c2, d2, e) = greeks::all(
+                    bsm::Flag::Call,
+                    black_box(100.0),
+                    black_box(k),
+                    black_box(0.5),
+                    black_box(0.05),
+                    black_box(0.0),
+                    black_box(0.20),
+                );
+                d.push(a);
+                g.push(b2);
+                v.push(c2);
+                th.push(d2);
+                rh.push(e);
+            }
+            (d, g, v, th, rh)
+        });
+    });
+    // The "individual" arm is the baseline the combined path must beat —
+    // five separate Vec builds, one per Greek, the way `bs.greeks()` does
+    // it pre-F1. Keep both arms so any future regression in the combined
+    // path is visible as the gap closing.
+    group.bench_function(BenchmarkId::new("individual", VEC_LEN), |b| {
+        b.iter(|| {
+            let mut d = Vec::with_capacity(VEC_LEN);
+            let mut g = Vec::with_capacity(VEC_LEN);
+            let mut v = Vec::with_capacity(VEC_LEN);
+            let mut th = Vec::with_capacity(VEC_LEN);
+            let mut rh = Vec::with_capacity(VEC_LEN);
+            for &k in &strikes {
+                d.push(greeks::delta(
+                    bsm::Flag::Call,
+                    black_box(100.0),
+                    black_box(k),
+                    black_box(0.5),
+                    black_box(0.05),
+                    black_box(0.0),
+                    black_box(0.20),
+                ));
+                g.push(greeks::gamma(
+                    black_box(100.0),
+                    black_box(k),
+                    black_box(0.5),
+                    black_box(0.05),
+                    black_box(0.0),
+                    black_box(0.20),
+                ));
+                v.push(greeks::vega(
+                    black_box(100.0),
+                    black_box(k),
+                    black_box(0.5),
+                    black_box(0.05),
+                    black_box(0.0),
+                    black_box(0.20),
+                ));
+                th.push(greeks::theta(
+                    bsm::Flag::Call,
+                    black_box(100.0),
+                    black_box(k),
+                    black_box(0.5),
+                    black_box(0.05),
+                    black_box(0.0),
+                    black_box(0.20),
+                ));
+                rh.push(greeks::rho(
+                    bsm::Flag::Call,
+                    black_box(100.0),
+                    black_box(k),
+                    black_box(0.5),
+                    black_box(0.05),
+                    black_box(0.0),
+                    black_box(0.20),
+                ));
+            }
+            (d, g, v, th, rh)
+        });
+    });
+    group.finish();
+}
+
 fn bench_black76_price_scalar(c: &mut Criterion) {
     c.bench_function("black76_price_scalar", |b| {
         b.iter(|| {
@@ -173,6 +270,7 @@ criterion_group!(
     bench_bsm_vega_vec,
     bench_iv_solve_scalar,
     bench_iv_solve_vec,
+    bench_bsm_greeks_all_vec,
     bench_black76_price_scalar,
 );
 criterion_main!(benches);

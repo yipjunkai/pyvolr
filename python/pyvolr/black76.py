@@ -177,11 +177,18 @@ def greeks(
     r: ArrayLike,
     sigma: ArrayLike,
 ) -> dict[str, Any]:
-    """Compute the standard five Greeks at once. Returns a dict."""
+    """Compute the standard five Greeks at once. Returns a dict.
+
+    Single FFI call into a shared Rust kernel — see `pyvolr.bs.greeks` for
+    the rationale.
+    """
+    flat, shape = broadcast_f64(F, K, T, r, sigma)
+    flag_arr = normalize_flag(flag, shape).ravel()
+    d, g, v, th, rh = _core.black76_greeks(flag_arr, *flat)
     return {
-        "delta": delta(flag, F, K, T, r, sigma),
-        "gamma": gamma(F, K, T, r, sigma),
-        "theta": theta(flag, F, K, T, r, sigma),
-        "vega": vega(F, K, T, r, sigma),
-        "rho": rho(flag, F, K, T, r, sigma),
+        "delta": scalar_or_array(d, shape),
+        "gamma": scalar_or_array(g, shape),
+        "theta": scalar_or_array(th, shape),
+        "vega": scalar_or_array(v, shape),
+        "rho": scalar_or_array(rh, shape),
     }
