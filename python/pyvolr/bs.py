@@ -184,7 +184,7 @@ def greeks(
 
     Single FFI call into a shared Rust kernel that computes `d1`/`d2`, the
     discount factors, `cdf(d1)`/`cdf(d2)`, and `pdf(d1)` once and reuses them
-    across all five Greeks — 3-5× faster than calling each Greek separately.
+    across all five Greeks — 3-5x faster than calling each Greek separately.
     """
     flat, shape = broadcast_f64(S, K, T, r, q, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()

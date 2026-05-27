@@ -66,14 +66,7 @@ pub fn rho(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
 /// discount factor, `cdf`, and `pdf` evaluations across delta/gamma/vega/
 /// theta, and reuses the rebuilt call/put price to derive rho (= `-T·price`).
 /// Numerically identical to calling the per-Greek functions individually.
-pub fn all(
-    flag: Flag,
-    f: f64,
-    k: f64,
-    t: f64,
-    r: f64,
-    sigma: f64,
-) -> (f64, f64, f64, f64, f64) {
+pub fn all(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> (f64, f64, f64, f64, f64) {
     // Degenerate regime: defer delta to its existing scalar path, and rho stays
     // `-T·price` (Black-76 rho is defined off the price, not the d1/d2 form).
     if t <= 0.0 || sigma <= 0.0 {

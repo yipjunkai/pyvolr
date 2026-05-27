@@ -73,6 +73,21 @@ def bsm_iv(
     r: NDArray[np.float64],
     q: NDArray[np.float64],
 ) -> NDArray[np.float64]: ...
+def bsm_greeks(
+    flag: NDArray[np.int8],
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> tuple[
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+]: ...
 def black76_price(
     flag: NDArray[np.int8],
     f: NDArray[np.float64],
@@ -127,3 +142,17 @@ def black76_iv(
     t: NDArray[np.float64],
     r: NDArray[np.float64],
 ) -> NDArray[np.float64]: ...
+def black76_greeks(
+    flag: NDArray[np.int8],
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> tuple[
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+]: ...

@@ -263,8 +263,15 @@ fn bsm_greeks<'py>(
     let mut theta = Vec::with_capacity(n);
     let mut rho = Vec::with_capacity(n);
     for i in 0..n {
-        let (d, g, v, th, rh) =
-            greeks::all(Flag::from_i8(flag[i]), s[i], k[i], t[i], r[i], q[i], sigma[i]);
+        let (d, g, v, th, rh) = greeks::all(
+            Flag::from_i8(flag[i]),
+            s[i],
+            k[i],
+            t[i],
+            r[i],
+            q[i],
+            sigma[i],
+        );
         delta.push(d);
         gamma.push(g);
         vega.push(v);

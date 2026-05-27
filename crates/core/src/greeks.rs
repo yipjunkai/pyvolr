@@ -226,18 +226,10 @@ mod tests {
         for &(s, k, t, r, q, sigma) in grid {
             for &flag in &[Flag::Call, Flag::Put] {
                 let (d, g, v, th, rh) = all(flag, s, k, t, r, q, sigma);
-                assert_relative_eq!(
-                    d,
-                    delta(flag, s, k, t, r, q, sigma),
-                    max_relative = 1e-15
-                );
+                assert_relative_eq!(d, delta(flag, s, k, t, r, q, sigma), max_relative = 1e-15);
                 assert_relative_eq!(g, gamma(s, k, t, r, q, sigma), max_relative = 1e-15);
                 assert_relative_eq!(v, vega(s, k, t, r, q, sigma), max_relative = 1e-15);
-                assert_relative_eq!(
-                    th,
-                    theta(flag, s, k, t, r, q, sigma),
-                    max_relative = 1e-15
-                );
+                assert_relative_eq!(th, theta(flag, s, k, t, r, q, sigma), max_relative = 1e-15);
                 assert_relative_eq!(rh, rho(flag, s, k, t, r, q, sigma), max_relative = 1e-15);
             }
         }

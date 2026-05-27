@@ -67,12 +67,8 @@ fn bsm_price_branchless(
     let disc_q = (-q * t).exp();
     let disc_r = (-r * t).exp();
     match flag {
-        bsm::Flag::Call => {
-            s * disc_q * cdf_branchless(d1) - k * disc_r * cdf_branchless(d2)
-        }
-        bsm::Flag::Put => {
-            k * disc_r * cdf_branchless(-d2) - s * disc_q * cdf_branchless(-d1)
-        }
+        bsm::Flag::Call => s * disc_q * cdf_branchless(d1) - k * disc_r * cdf_branchless(d2),
+        bsm::Flag::Put => k * disc_r * cdf_branchless(-d2) - s * disc_q * cdf_branchless(-d1),
     }
 }
 
