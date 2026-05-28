@@ -1,8 +1,10 @@
 """Type stubs for the pyvolr._core Rust extension.
 
-All functions take flat (1-D, contiguous) numpy arrays of equal length and
-return a numpy float64 array of the same length. The Python wrapper in
-``pyvolr.bs`` is responsible for broadcasting and reshape.
+All functions take flat (1-D, contiguous) numpy arrays of equal length.
+Most return a single numpy float64 array of the same length; the bundled
+``bsm_greeks`` / ``black76_greeks`` entry points return a 5-tuple of such
+arrays (one per Greek). The Python wrapper in ``pyvolr.bs`` /
+``pyvolr.black76`` is responsible for broadcasting and reshape.
 """
 
 from __future__ import annotations

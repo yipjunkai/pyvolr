@@ -456,19 +456,25 @@ fn bench_bsm_price_flag_dispatch(c: &mut Criterion) {
     group.finish();
 }
 
-/// F4 investigation bench (audit/mechanical-sympathy): does rayon
+/// F4 / F4b investigation bench (audit/mechanical-sympathy): does rayon
 /// parallelisation of the `PyO3` outer loop produce a meaningful win, and
 /// at what `N` does it start to pay (vs rayon's per-call overhead)?
 ///
-/// Each arm runs the inner loop of the production `PyO3` macro — collect
-/// `N` calls of either `bsm::price` or `iv::solve` into a `Vec<f64>` —
-/// once serial, once via `(0..N).into_par_iter()`. The same `(s, k, ...)`
-/// inputs are used in both arms so the only variable is scheduling.
+/// Three sub-benches — one per production entry point that could benefit
+/// from parallelism: `bsm::price` (cheapest, ~14ns/row), `iv::solve`
+/// (most expensive, ~280ns/row), and `greeks::all` (middle, ~19ns/row).
+/// Each runs the inner loop of the production `PyO3` macro — collect `N`
+/// calls into a `Vec` — once serial, once via `(0..N).into_par_iter()`,
+/// with the same inputs in both arms so the only variable is scheduling.
 ///
 /// Parameterised over `N ∈ {100, 1_000, 10_000, 100_000}` so we can see:
 /// (a) the per-row cost vs rayon overhead break-even point, and
 /// (b) the N-core saturation ceiling at large N.
-#[allow(clippy::too_many_lines)] // three input distributions × 4 sizes × serial/parallel arms
+///
+/// The data here drove the threshold choices in `lib.rs`:
+/// `PARALLEL_THRESHOLD = 1024` for IV, `GREEKS_PARALLEL_THRESHOLD = 4096`
+/// for bundled Greeks; pricing was not gated (break-even too high).
+#[allow(clippy::too_many_lines)] // three sub-benches × 4 sizes × serial/rayon arms
 fn bench_parallel_dispatch_experiment(c: &mut Criterion) {
     let sizes: [usize; 4] = [100, 1_000, 10_000, 100_000];
 

@@ -21,8 +21,8 @@ mod normalised_black {
     //!
     //! The undiscounted BSM call price is `√(F·K) · b(x, s) + intrinsic`.
     //!
-    //! Four evaluation regions are dispatched by `call` (Jäckel §3.1) to keep
-    //! `b` accurate to ~1 ULP across all moneyness/vol combinations:
+    //! Four evaluation regions are dispatched by `call_and_vega` (Jäckel §3.1)
+    //! to keep `b` accurate to ~1 ULP across all moneyness/vol combinations:
     //!   1. asymptotic series (very negative x, small t — divergent A&S 26.2.12
     //!      truncated at 17th order in q = (h/r)²)
     //!   2. small-t series (short expiry / low vol — 12th order in t²)
