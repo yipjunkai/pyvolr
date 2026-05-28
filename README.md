@@ -44,6 +44,39 @@ Vectorize anything you can — that's where pyvolr wins. For a single scalar `pr
 
 Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.2 vs py_vollib 1.0.1.
 
+### 🌐 ...or against the live ecosystem
+
+py_vollib is the historical comparison; here's where pyvolr sits against the actively-maintained BSM-pricing libraries:
+
+<table>
+<tr>
+<td>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-competitors-time-dark.svg">
+  <img alt="Time per call: pyvolr vs the active BSM-pricing ecosystem, log-log by array size" src="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-competitors-time-light.svg">
+</picture>
+
+</td>
+<td>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-competitors-thru-dark.svg">
+  <img alt="Throughput: pyvolr vs the active BSM-pricing ecosystem, log-log by array size" src="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-competitors-thru-light.svg">
+</picture>
+
+</td>
+</tr>
+</table>
+
+Six libraries on the chart: `pyvolr`, [`vollib`](https://pypi.org/project/vollib/) (resurrected upstream, pure Python), [`py_vollib_vectorized`](https://pypi.org/project/py_vollib_vectorized/) (numba), [`blackscholes`](https://pypi.org/project/blackscholes/) (pure Python, object-per-call), [`QuantLib`](https://pypi.org/project/QuantLib/) (C++ core, looped scalar), and [`quantforge`](https://pypi.org/project/quantforge/) (Rust + SIMD).
+
+pyvolr leads at every input size up to ~1M strikes. **quantforge overtakes at very large batches** via explicit SIMD vectorisation — the same axis [fast-vollib](https://arxiv.org/abs/2604.27210) takes with Triton kernels. pyvolr's positioning is explicitly the "Rust-cored CPU option" — no `unsafe` SIMD intrinsics, no GPU dependency, abi3 wheel ships in one file. If you're pricing 10M+ strikes per call and CPU-only, prefer quantforge.
+
+For the workload most people actually run — a smile, an option chain, an IV snapshot — pyvolr is faster than every other actively-maintained alternative and installs cleanly on every modern Python.
+
+Reproduce with `python bench/compare_competitors.py bench` (across the Python 3.11 + 3.12 venvs documented in the script's docstring) then `python bench/compare_competitors.py chart`. Library versions: pyvolr 0.1.2 / vollib 1.0.7 / py_vollib_vectorized 0.1.1 / blackscholes 0.2.0 / QuantLib 1.42.1 / quantforge 0.1.1.
+
 ## 📦 Install
 
 ```bash
