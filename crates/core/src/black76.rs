@@ -89,7 +89,13 @@ pub fn all(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> (f64, f64,
             (
                 disc * nd1,
                 common - r * k * disc * nd2 + r * f * disc * nd1,
-                disc * (f * nd1 - k * nd2),
+                // Mirror `bsm::price`'s arithmetic ordering exactly
+                // (`f * disc * nd1 - k * disc * nd2`, NOT `disc * (f*nd1 -
+                // k*nd2)`). At deep OTM the two associations produce
+                // different f64 values due to cancellation; matching
+                // `bsm::price` keeps `rho_v` bit-equal to the standalone
+                // `rho()` path (which routes through `bsm_price`).
+                f * disc * nd1 - k * disc * nd2,
             )
         }
         Flag::Put => {
@@ -102,7 +108,8 @@ pub fn all(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> (f64, f64,
             (
                 -disc * neg_nd1,
                 common + r * k * disc * neg_nd2 - r * f * disc * neg_nd1,
-                disc * (k * neg_nd2 - f * neg_nd1),
+                // Same association-matching argument as the call arm.
+                k * disc * neg_nd2 - f * disc * neg_nd1,
             )
         }
     };
@@ -253,6 +260,12 @@ mod tests {
 
     /// Drift guard: `all()` must agree with the per-Greek functions across
     /// both flags and across both regular and degenerate input regimes.
+    ///
+    /// Includes a deep-OTM put cell where the `f*N(d1) - k*N(d2)` cancellation
+    /// inside Black-76 rho is large enough that the choice between
+    /// `disc * (f*nd1 - k*nd2)` and `f*disc*nd1 - k*disc*nd2` produces visibly
+    /// different f64 values. `all` mirrors `bsm::price`'s second association
+    /// so `rho_v = -t * price_v` stays bit-equal to the standalone path.
     #[test]
     fn all_matches_individual_at_grid() {
         let grid: &[(f64, f64, f64, f64, f64)] = &[
@@ -260,6 +273,9 @@ mod tests {
             (49.0, 50.0, 0.3846, 0.05, 0.20),
             (100.0, 200.0, 0.5, 0.05, 0.30),
             (1000.0, 100.0, 0.01, 0.05, 0.20),
+            // Deep-OTM corner reached by the fuzz harness: price ~ 1e-15,
+            // catches the `f*nd1 - k*nd2` cancellation asymmetry on rho.
+            (10.0, 100.0, 0.5, 0.05, 0.20),
         ];
         for &(f, k, t, r, sigma) in grid {
             for &flag in &[Flag::Call, Flag::Put] {
@@ -268,8 +284,6 @@ mod tests {
                 assert_relative_eq!(g, gamma(f, k, t, r, sigma), max_relative = 1e-15);
                 assert_relative_eq!(v, vega(f, k, t, r, sigma), max_relative = 1e-15);
                 assert_relative_eq!(th, theta(flag, f, k, t, r, sigma), max_relative = 1e-15);
-                // Black-76 rho: `all` reuses the recomputed price; rho() recomputes from price().
-                // Both paths run the same arithmetic so the result is bitwise equal.
                 assert_relative_eq!(rh, rho(flag, f, k, t, r, sigma), max_relative = 1e-15);
             }
         }
