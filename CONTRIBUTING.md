@@ -47,6 +47,7 @@ For day-to-day work, `maturin develop` (no `--release`) is faster but slower at 
    - Property tests in `tests/test_property.py` (put-call parity if applicable, monotonicities, asymptotic limits)
    - Differential cases in `tests/test_differential.py` if there's a py_vollib equivalent (gates the "matches reference" claim)
    - A fuzz target under `fuzz/fuzz_targets/<model>_price.rs` and add it to the matrix in `.github/workflows/fuzz.yml`
+   - If applicable, an adapter in `bench/sanity_check_competitors.py` so the new model's outputs get cross-checked against the live competitor set on the next manual sweep
 
 ## Adding a Greek
 

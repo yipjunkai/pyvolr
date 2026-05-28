@@ -51,12 +51,12 @@ pyvolr leads at every input size up to ~1M strikes. **quantforge overtakes at ve
 | `bs.price`, 1M strikes         | 14.54 ms |   2,350 ms |     162× |
 | `bs.greeks` (all 5), 10k       |   273 µs |   89.95 ms |     330× |
 | `bs.implied_vol`, scalar       |   4.4 µs |    15.0 µs |     3.4× |
-| `bs.implied_vol`, 10k strikes  |   465 µs | ≈ 150 ms ¹ |   ≈ 323× |
+| `bs.implied_vol`, 10k strikes  |   465 µs |   128 ms ¹ |     275× |
 | `black76.price`, scalar        |   3.7 µs |     2.2 µs |     0.6× |
 | `black76.price`, 10k strikes   |   141 µs |   23.19 ms |     164× |
 | `black76.implied_vol`, scalar  |   3.9 µs |    14.7 µs |     3.8× |
 
-¹ py_vollib's `implied_volatility` is scalar-only; the 10k figure is `N × scalar`. pyvolr's vectorised path also parallelises automatically above N=1024 via rayon — set `RAYON_NUM_THREADS=1` to force serial.
+¹ py_vollib's `implied_volatility` is scalar-only; the 10k figure is `N` × scalar measured via `compare_py_vollib.py`. pyvolr's vectorised path parallelises automatically above N=1024 via rayon — set `RAYON_NUM_THREADS=1` to force serial.
 
 The table above is the headline-vs-the-abandoned-upstream comparison (py_vollib's last release is broken on Python 3.12+, see [docs/why.md](docs/why.md)). For the workload most people actually run — a smile, an option chain, an IV snapshot — pyvolr is faster than every actively-maintained alternative and installs cleanly on every modern Python.
 

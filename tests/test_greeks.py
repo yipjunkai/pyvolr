@@ -164,3 +164,38 @@ class TestGreekProperties:
         strikes = np.linspace(50, 200, 30)
         v = bs.vega(S=100, K=strikes, T=1.0, r=0.05, sigma=0.20)
         assert np.all(v >= 0)
+
+
+class TestParallelDispatch:
+    """Exercise the rayon-parallel branch of `bsm_greeks` (above N=4096).
+
+    The parallel branch in `crates/core/src/lib.rs` collects 5-tuples in
+    rayon, then unzips serially into the five output Vecs. The Rust-level
+    parity test (`greeks::tests::all_matches_individual_at_grid`) covers
+    `greeks::all` itself; this test covers the dispatch + unzip path at
+    the FFI boundary, at a batch size above `GREEKS_PARALLEL_THRESHOLD`.
+    """
+
+    def test_greeks_above_threshold_matches_individual(self) -> None:
+        n = 8192  # > GREEKS_PARALLEL_THRESHOLD (4096)
+        K = np.linspace(80, 120, n)
+        S, T, r, sigma = 100.0, 0.5, 0.05, 0.20
+        # Bundled, goes through the rayon parallel branch.
+        g = bs.greeks("c", S=S, K=K, T=T, r=r, sigma=sigma)
+        # The per-Greek functions stay serial regardless of N. They use the
+        # same `greeks::all`-compatible formulas, so should match the
+        # bundled output to f64 (`greeks::tests::all_matches_individual_*`
+        # proves the Rust-level parity at 1e-15).
+        np.testing.assert_allclose(
+            g["delta"], bs.delta("c", S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            g["gamma"], bs.gamma(S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(g["vega"], bs.vega(S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14)
+        np.testing.assert_allclose(
+            g["theta"], bs.theta("c", S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            g["rho"], bs.rho("c", S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )

@@ -59,3 +59,20 @@ class TestVectorized:
         assert isinstance(ivs, np.ndarray)
         assert ivs.shape == sigmas.shape
         np.testing.assert_allclose(ivs, sigmas, rtol=1e-12)
+
+    def test_parallel_branch_above_threshold(self) -> None:
+        # bsm_iv dispatches per-row work to rayon above N = PARALLEL_THRESHOLD
+        # (1024 in `crates/core/src/lib.rs`). Below the threshold all calls go
+        # through the serial path. This test exercises the parallel branch
+        # explicitly so the dispatch / `py.detach` / collect path is covered
+        # by CI rather than only by manual benches.
+        n = 2048  # comfortably above PARALLEL_THRESHOLD
+        sigma = 0.20
+        K = np.linspace(80, 120, n)
+        prices = bs.price("c", S=100, K=K, T=0.5, r=0.05, sigma=sigma)
+        ivs = bs.implied_vol(prices, "c", S=100, K=K, T=0.5, r=0.05)
+        assert isinstance(ivs, np.ndarray)
+        assert ivs.shape == (n,)
+        # LBR converges to ~1e-13; the parallel branch produces bit-identical
+        # results to serial (same arithmetic, different scheduling).
+        np.testing.assert_allclose(ivs, sigma, rtol=1e-12)
