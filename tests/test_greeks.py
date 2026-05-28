@@ -176,26 +176,30 @@ class TestParallelDispatch:
     the FFI boundary, at a batch size above `GREEKS_PARALLEL_THRESHOLD`.
     """
 
-    def test_greeks_above_threshold_matches_individual(self) -> None:
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_greeks_above_threshold_matches_individual(self, flag: str) -> None:
+        # Parametrized over flag because the put arm of `greeks::all` uses
+        # different cdf calls (`cdf(-d1)` / `cdf(-d2)`) than the call arm,
+        # and would silently regress if only the call path were tested.
         n = 8192  # > GREEKS_PARALLEL_THRESHOLD (4096)
         K = np.linspace(80, 120, n)
         S, T, r, sigma = 100.0, 0.5, 0.05, 0.20
         # Bundled, goes through the rayon parallel branch.
-        g = bs.greeks("c", S=S, K=K, T=T, r=r, sigma=sigma)
+        g = bs.greeks(flag, S=S, K=K, T=T, r=r, sigma=sigma)
         # The per-Greek functions stay serial regardless of N. They use the
         # same `greeks::all`-compatible formulas, so should match the
         # bundled output to f64 (`greeks::tests::all_matches_individual_*`
         # proves the Rust-level parity at 1e-15).
         np.testing.assert_allclose(
-            g["delta"], bs.delta("c", S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+            g["delta"], bs.delta(flag, S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
         )
         np.testing.assert_allclose(
             g["gamma"], bs.gamma(S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
         )
         np.testing.assert_allclose(g["vega"], bs.vega(S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14)
         np.testing.assert_allclose(
-            g["theta"], bs.theta("c", S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+            g["theta"], bs.theta(flag, S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
         )
         np.testing.assert_allclose(
-            g["rho"], bs.rho("c", S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+            g["rho"], bs.rho(flag, S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
         )
