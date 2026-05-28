@@ -171,6 +171,28 @@ class TestImpliedVol:
         assert np.isnan(iv)
 
 
+class TestPrecisionCorners:
+    """Python-level guards for the deep-OTM put-delta corner.
+
+    Mirror of the BSM tests in `test_greeks.py::TestPrecisionCorners`.
+    Black-76's `delta` and `greeks` route through `greeks::delta` /
+    `black76::all`, both touched by the put-delta fix (commit 30d5d1f).
+    """
+
+    def test_put_delta_deep_otm_retains_precision(self) -> None:
+        d = black76.delta("p", F=1000, K=100, T=0.5, r=0.05, sigma=0.20)
+        assert isinstance(d, float)
+        assert d < 0.0, f"put delta lost sign at deep OTM (got {d:e})"
+        assert 0.0 < abs(d) < 1e-50
+
+    def test_bundled_greeks_put_delta_deep_otm_retains_precision(self) -> None:
+        g = black76.greeks("p", F=1000, K=100, T=0.5, r=0.05, sigma=0.20)
+        d = g["delta"]
+        assert isinstance(d, float)
+        assert d < 0.0, f"put delta lost sign at deep OTM via greeks() (got {d:e})"
+        assert 0.0 < abs(d) < 1e-50
+
+
 class TestParallelDispatch:
     """Exercise the rayon-parallel branch of `black76_greeks` (above N=4096)
     and `black76_iv` (above N=1024).

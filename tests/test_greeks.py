@@ -166,6 +166,43 @@ class TestGreekProperties:
         assert np.all(v >= 0)
 
 
+class TestPrecisionCorners:
+    """Python-level guards for the precision corners the audit fixed.
+
+    The Rust-side parity tests (`greeks::tests::put_delta_deep_otm_retains_precision`,
+    `call_and_vega_matches_separate`) catch regressions in the scalar Rust
+    functions. These mirror the same corners through the PyO3 FFI boundary
+    so a regression in the macro dispatch / numpy roundtrip also fires.
+
+    The differential test (`tests/test_differential.py`) does NOT cover
+    these corners: at the deep-OTM saturation cliff, py_vollib's own
+    formula underflows to zero and pyvolr's erfcx-tail formula returns
+    ~1e-61. Both are below the `abs=1e-10` differential tolerance, so
+    the bug-fix slipping back through the macro layer would be silent.
+    """
+
+    def test_put_delta_deep_otm_retains_precision(self) -> None:
+        # S=1000, K=100, T=0.5, sigma=20% → d1 ≈ 16.5 → cdf(d1) saturates to
+        # 1.0 in f64. The old `cdf(d1) - 1.0` form returned exactly 0;
+        # the `-cdf(-d1)` form (commit 30d5d1f) returns ~-1.1e-61 via
+        # the erfcx tail. This test guards the fix at the Python API.
+        d = bs.delta("p", S=1000, K=100, T=0.5, r=0.05, sigma=0.20)
+        assert isinstance(d, float)
+        assert d < 0.0, f"put delta lost sign at deep OTM (returned {d:e})"
+        assert 0.0 < abs(d) < 1e-50, f"expected ~1e-61, got {d:e}"
+
+    def test_bundled_greeks_put_delta_deep_otm_retains_precision(self) -> None:
+        # Same corner via the bundled `bs.greeks()` path, which routes
+        # through `greeks::all` (different code path than `bs.delta`'s
+        # `greeks::delta`). Catches regressions in the put-arm of the
+        # all-in-one kernel.
+        g = bs.greeks("p", S=1000, K=100, T=0.5, r=0.05, sigma=0.20)
+        d = g["delta"]
+        assert isinstance(d, float)
+        assert d < 0.0, f"put delta lost sign at deep OTM via greeks() (got {d:e})"
+        assert 0.0 < abs(d) < 1e-50
+
+
 class TestParallelDispatch:
     """Exercise the rayon-parallel branch of `bsm_greeks` (above N=4096).
 
