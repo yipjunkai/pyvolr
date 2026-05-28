@@ -93,11 +93,14 @@ pub fn all(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> (f64, f64,
             )
         }
         Flag::Put => {
+            // Same f64-precision argument as `greeks::all`: route put delta
+            // through `cdf(-d1)` so the `erfcx` tail handles deep-OTM puts
+            // without the `cdf(d1) - 1.0` catastrophic cancellation.
             let neg_nd1 = cdf(-d1);
             let neg_nd2 = cdf(-d2);
             let common = -f * disc * pd1 * sigma / (2.0 * sqrt_t);
             (
-                disc * (nd1 - 1.0),
+                -disc * neg_nd1,
                 common + r * k * disc * neg_nd2 - r * f * disc * neg_nd1,
                 disc * (k * neg_nd2 - f * neg_nd1),
             )
@@ -270,6 +273,19 @@ mod tests {
                 assert_relative_eq!(rh, rho(flag, f, k, t, r, sigma), max_relative = 1e-15);
             }
         }
+    }
+
+    /// Deep-OTM put precision via `black76::all`. Mirrors the BSM regression
+    /// test (`greeks::tests::put_delta_deep_otm_retains_precision`): when
+    /// `d1` saturates so `cdf(d1) == 1.0` exactly, the old `nd1 - 1.0` form
+    /// returned `0.0` instead of the correct tiny-negative put delta. The
+    /// fix routes through `-cdf(-d1)` (erfcx tail).
+    #[test]
+    fn all_put_delta_deep_otm_retains_precision() {
+        // F=1000, K=100 (10x OTM put), T=0.5y, σ=20% → d1 ≈ 16.5.
+        let (d, _, _, _, _) = all(Flag::Put, 1000.0, 100.0, 0.5, 0.05, 0.20);
+        assert!(d < 0.0, "put delta lost sign at deep OTM (returned {d:e})");
+        assert!(d.abs() < 1e-50 && d.abs() > 0.0, "expected ~1e-61, got {d:e}");
     }
 
     #[test]

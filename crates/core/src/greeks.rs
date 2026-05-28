@@ -32,7 +32,11 @@ pub fn delta(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> 
     let disc_q = (-q * t).exp();
     match flag {
         Flag::Call => disc_q * cdf(d1),
-        Flag::Put => disc_q * (cdf(d1) - 1.0),
+        // `-cdf(-d1)` routes via the `erfcx` tail when d1 is large positive,
+        // keeping put delta f64-precise on deep-OTM strikes. The natural
+        // `cdf(d1) - 1.0` form cancels catastrophically there (cdf(d1)
+        // saturates to 1.0 once `1 - cdf(d1) < f64::EPSILON`, around d1 ≈ 8).
+        Flag::Put => -disc_q * cdf(-d1),
     }
 }
 
@@ -124,15 +128,15 @@ pub fn all(
             )
         }
         Flag::Put => {
-            // Put theta/rho reference `cdf(-d1)`/`cdf(-d2)` directly so the
-            // `erfcx`-tail branch handles deep-ITM puts without precision loss.
-            // Put delta intentionally uses `cdf(d1) - 1.0` to match the existing
-            // scalar `delta` formula exactly (a separate precision issue).
+            // Use `cdf(-d1)` / `cdf(-d2)` directly throughout (delta, theta,
+            // rho) so the `erfcx`-tail branch handles large `|d1|` / `|d2|`
+            // without precision loss — `cdf(d1) - 1.0` cancels catastrophically
+            // for deep-OTM puts (d1 large positive, cdf(d1) saturates to 1.0).
             let neg_nd1 = cdf(-d1);
             let neg_nd2 = cdf(-d2);
             let common = -s * disc_q * pd1 * sigma / (2.0 * sqrt_t);
             (
-                disc_q * (nd1 - 1.0),
+                -disc_q * neg_nd1,
                 common + r * k * disc_r * neg_nd2 - q * s * disc_q * neg_nd1,
                 -k * t * disc_r * neg_nd2,
             )
@@ -233,6 +237,45 @@ mod tests {
                 assert_relative_eq!(rh, rho(flag, s, k, t, r, q, sigma), max_relative = 1e-15);
             }
         }
+    }
+
+    /// Deep-OTM put precision: when `d1` is large positive, `cdf(d1)` rounds
+    /// to exactly `1.0` in f64 (since `1 − cdf(d1) < ε`), so the old form
+    /// `cdf(d1) − 1.0` evaluates to `0.0` exactly and put delta drops its
+    /// sign and magnitude. The fix routes through `−cdf(−d1)`, where the
+    /// `erfcx` tail in `normal::cdf` keeps the value f64-precise.
+    #[test]
+    fn put_delta_deep_otm_retains_precision() {
+        // S=1000, K=100 (10x OTM put), T=0.5y, σ=20% → d1 ≈ 16.5.
+        // cdf(16.5) saturates to 1.0; cdf(-16.5) ≈ 1.5e-61 via erfcx.
+        let pd = delta(Flag::Put, 1000.0, 100.0, 0.5, 0.05, 0.0, 0.20);
+        // Must be strictly negative (the old form returned exactly 0.0).
+        assert!(
+            pd < 0.0,
+            "put delta lost sign at deep OTM (returned {pd:e}); old `cdf(d1) - 1.0` form"
+        );
+        // Must be tiny but non-zero — the call delta is essentially exp(-qT)=1
+        // here, so the put delta is essentially -1·(1 - cdf(d1)) ≈ -1.5e-61.
+        assert!(
+            pd.abs() < 1e-50,
+            "put delta should be ~1e-61 at deep OTM, got {pd:e}"
+        );
+        assert!(pd.abs() > 0.0, "put delta underflowed to zero ({pd:e})");
+    }
+
+    /// Identity guard: `call_delta − put_delta = exp(−qT)` for all inputs
+    /// (this is `d(C−P)/dS` from put-call parity, since `C−P = S·exp(−qT) − K·exp(−rT)`).
+    /// The new put-delta form preserves this identity to f64 even where the
+    /// old form failed (call delta is correct in both forms; only put delta
+    /// changes, and the identity is now exact at deep OTM too).
+    #[test]
+    fn put_call_delta_parity_holds_at_deep_otm() {
+        let (s, k, t, r, q, sigma) = (1000.0, 100.0, 0.5, 0.05, 0.0, 0.20);
+        let cd = delta(Flag::Call, s, k, t, r, q, sigma);
+        let pd = delta(Flag::Put, s, k, t, r, q, sigma);
+        let disc_q = (-q * t).exp();
+        // call_delta + |put_delta| = exp(-qT) (since put_delta is negative).
+        assert_relative_eq!(cd - pd, disc_q, max_relative = 1e-15);
     }
 
     #[test]
