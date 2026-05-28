@@ -192,6 +192,10 @@ pyvolr/
 │   │   ├── iv.rs            # Jäckel "Let's Be Rational" IV solver (Householder-4, ≤2 iters)
 │   │   └── normal.rs        # Φ / φ, erfcx (Lentz CF), inverse CDF (Wichura AS241)
 │   └── benches/             # criterion benches gating the README's perf claims
+├── bench/                   # Python-level speed/precision scripts (dev-only, not in CI)
+│   ├── compare_py_vollib.py            # reproduces the perf table
+│   ├── compare_competitors.py          # reproduces the perf chart (6 libraries)
+│   └── sanity_check_competitors.py     # cross-validates numerical agreement
 ├── python/pyvolr/
 │   ├── bs.py                # BSM public API (numpy-broadcast wrappers)
 │   ├── black76.py           # Black-76 public API

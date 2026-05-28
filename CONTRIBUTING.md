@@ -37,7 +37,7 @@ For day-to-day work, `maturin develop` (no `--release`) is faster but slower at 
 `crates/core/src/black76.rs` is the most recent worked example — copy its structure.
 
 1. Implement the pricer in a new Rust module under `crates/core/src/<model>.rs`. If the math is a specialization of BSM (as Black-76 is), delegate to `bsm`/`greeks` rather than duplicating closed-form code; only carry your own implementation for Greeks that genuinely diverge.
-2. Expose batched f64-array entry points in `crates/core/src/lib.rs`. Reuse the `define_price_or_greek!` macro (or the `define_black76!` variant) if the arity matches.
+2. Expose batched f64-array entry points in `crates/core/src/lib.rs`. Reuse the `define_price_or_greek!` macro (or the `define_black76!` variant) if the arity matches. For high-per-row-cost functions (`iv::solve`-class, ~280ns/row) or bundled multi-output kernels (`greeks::all`-class), don't use the macro — copy the hand-written pattern from `bsm_iv` / `bsm_greeks`: a `work` closure, `py.detach(|| (0..n).into_par_iter().map(work).collect())` above `PARALLEL_THRESHOLD` (1024 for IV) or `GREEKS_PARALLEL_THRESHOLD` (4096 for Greeks), and the serial fallback below. The threshold constants in `lib.rs` document the per-row-cost / break-even rationale.
 3. Add a Python wrapper at `python/pyvolr/<model>.py` mirroring the shape of `bs.py` / `black76.py` (numpy broadcasting via the helpers re-exported from `pyvolr.bs`).
 4. Add type stubs in `python/pyvolr/_core.pyi`.
 5. Export the new module from `python/pyvolr/__init__.py`.
@@ -54,7 +54,11 @@ For day-to-day work, `maturin develop` (no `--release`) is faster but slower at 
 2. Vectorized entry point in `crates/core/src/lib.rs`.
 3. Python wrapper in the relevant model module (`python/pyvolr/bs.py`, `python/pyvolr/black76.py`, ...).
 4. Test against a finite-difference approximation of the relevant price function (tolerance ~1e-5).
-5. Update the `greeks()` dict-returning function if it's a standard Greek.
+5. If it's a standard Greek that ships in `bs.greeks()` / `black76.greeks()`, also extend the single-pass kernels:
+   - `greeks::all` (and `black76::all`) — share `d1_d2` / discount factors / `cdf` / `pdf` with the existing Greeks rather than recomputing
+   - `GreeksTuple` arity + the bundled `bsm_greeks` / `black76_greeks` PyO3 entries in `crates/core/src/lib.rs`
+   - The matching `_core.pyi` stub return-type tuples
+   - Extend the `all_matches_individual_at_grid` parity test in both modules so the bundled kernel stays bit-equal to the per-Greek functions
 
 ## Numerical correctness expectations
 
