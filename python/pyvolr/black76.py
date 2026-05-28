@@ -155,12 +155,24 @@ def implied_vol(
 
     Uses the Jäckel "Let's Be Rational" algorithm (routes through
     ``iv::solve`` with ``q = r``). Converges to ~1e-13 precision in at
-    most two Householder iterations across the full no-arbitrage range.
+    most two Householder iterations across the full no-arbitrage range,
+    on **well-posed inputs** (see caveat below).
 
     Batches of ~1000 rows or more run on rayon's global thread pool with
     the GIL released. Set ``RAYON_NUM_THREADS=1`` in the environment to
     force serial execution — useful when calling pyvolr from inside a
     caller-managed thread pool that already saturates the cores.
+
+    .. note::
+
+       **Ill-conditioned inverse cases.** When the option price equals its
+       intrinsic value to f64 precision — typically deep ITM with very
+       short expiry — the price carries no signal about volatility. The
+       solver returns the sigma that *matches the price* (correct), but this
+       sigma may differ from the sigma that originally produced the price. This
+       is a property of the inverse problem, not the algorithm. Affects
+       strikes where ``|F/K|`` is far from 1 *and* ``T`` is small. See
+       the ``pyvolr.bs.implied_vol`` docstring for more detail.
 
     Returns NaN where:
       - the target price is outside the no-arbitrage bounds for the forward,
