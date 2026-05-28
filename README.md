@@ -22,20 +22,25 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
   <img alt="BSM call pricing throughput: pyvolr vs py_vollib, log-log scaling by array size" src="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-light.svg">
 </picture>
 
-| Scenario                      |   pyvolr | py_vollib | speedup |
-| ----------------------------- | -------: | --------: | ------: |
-| `bs.price`, scalar            |   4.1 µs |    2.2 µs |    0.5× |
-| `bs.price`, 1k strikes        |  29.3 µs |   2.32 ms |     79× |
-| `bs.price`, 10k strikes       |   188 µs |  23.32 ms |    124× |
-| `bs.price`, 100k strikes      |  1.67 ms | 234.91 ms |    141× |
-| `bs.price`, 1M strikes        | 17.46 ms |  2,350 ms |    135× |
-| `bs.greeks` (all 5), 10k      |   671 µs |  89.95 ms |    134× |
-| `bs.implied_vol`, scalar      |   4.4 µs |   15.0 µs |    3.4× |
-| `black76.price`, scalar       |   3.7 µs |    2.2 µs |    0.6× |
-| `black76.price`, 10k strikes  |   177 µs |  23.19 ms |    131× |
-| `black76.implied_vol`, scalar |   4.0 µs |   14.7 µs |    3.7× |
+| Scenario                       |   pyvolr |  py_vollib |  speedup |
+| ------------------------------ | -------: | ---------: | -------: |
+| `bs.price`, scalar             |   4.2 µs |     2.2 µs |     0.5× |
+| `bs.price`, 1k strikes         |  24.6 µs |    2.32 ms |      94× |
+| `bs.price`, 10k strikes        |   153 µs |   23.32 ms |     152× |
+| `bs.price`, 100k strikes       |  1.39 ms |  234.91 ms |     169× |
+| `bs.price`, 1M strikes         | 14.54 ms |   2,350 ms |     162× |
+| `bs.greeks` (all 5), 10k       |   273 µs |   89.95 ms |     330× |
+| `bs.implied_vol`, scalar       |   4.4 µs |    15.0 µs |     3.4× |
+| `bs.implied_vol`, 10k strikes  |   465 µs | ≈ 150 ms ¹ |   ≈ 323× |
+| `black76.price`, scalar        |   3.7 µs |     2.2 µs |     0.6× |
+| `black76.price`, 10k strikes   |   141 µs |   23.19 ms |     164× |
+| `black76.implied_vol`, scalar  |   3.9 µs |    14.7 µs |     3.8× |
+
+¹ py_vollib's `implied_volatility` is scalar-only; the 10k figure is `N × scalar`. pyvolr's vectorised path also parallelises automatically above N=1024 via rayon — set `RAYON_NUM_THREADS=1` to force serial.
 
 Vectorize anything you can — that's where pyvolr wins. For a single scalar `price` call, py_vollib's pure-Python path edges out pyvolr because the PyO3 FFI roundtrip + numpy broadcasting setup costs a few microseconds; even a 2-element array call already favors pyvolr. Black-76's profile tracks BSM's exactly because the Rust core delegates to `bsm::price` with `q=r` rather than duplicating math.
+
+`bs.greeks` returning all five Greeks at once uses a single-pass Rust kernel that shares `d1`/`d2`, discount factors, `cdf`, and `pdf` across the five outputs — ~3× faster than the equivalent five separate calls. For batches ≥4096 rows, the work also dispatches across CPU cores in parallel.
 
 Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.2 vs py_vollib 1.0.1.
 
