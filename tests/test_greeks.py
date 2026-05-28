@@ -164,3 +164,79 @@ class TestGreekProperties:
         strikes = np.linspace(50, 200, 30)
         v = bs.vega(S=100, K=strikes, T=1.0, r=0.05, sigma=0.20)
         assert np.all(v >= 0)
+
+
+class TestPrecisionCorners:
+    """Python-level guards for the precision corners the audit fixed.
+
+    The Rust-side parity tests (`greeks::tests::put_delta_deep_otm_retains_precision`,
+    `call_and_vega_matches_separate`) catch regressions in the scalar Rust
+    functions. These mirror the same corners through the PyO3 FFI boundary
+    so a regression in the macro dispatch / numpy roundtrip also fires.
+
+    The differential test (`tests/test_differential.py`) does NOT cover
+    these corners: at the deep-OTM saturation cliff, py_vollib's own
+    formula underflows to zero and pyvolr's erfcx-tail formula returns
+    ~1e-61. Both are below the `abs=1e-10` differential tolerance, so
+    the bug-fix slipping back through the macro layer would be silent.
+    """
+
+    def test_put_delta_deep_otm_retains_precision(self) -> None:
+        # S=1000, K=100, T=0.5, sigma=20% → d1 ≈ 16.5 → cdf(d1) saturates to
+        # 1.0 in f64. The old `cdf(d1) - 1.0` form returned exactly 0;
+        # the `-cdf(-d1)` form (commit 30d5d1f) returns ~-1.1e-61 via
+        # the erfcx tail. This test guards the fix at the Python API.
+        d = bs.delta("p", S=1000, K=100, T=0.5, r=0.05, sigma=0.20)
+        assert isinstance(d, float)
+        assert d < 0.0, f"put delta lost sign at deep OTM (returned {d:e})"
+        assert 0.0 < abs(d) < 1e-50, f"expected ~1e-61, got {d:e}"
+
+    def test_bundled_greeks_put_delta_deep_otm_retains_precision(self) -> None:
+        # Same corner via the bundled `bs.greeks()` path, which routes
+        # through `greeks::all` (different code path than `bs.delta`'s
+        # `greeks::delta`). Catches regressions in the put-arm of the
+        # all-in-one kernel.
+        g = bs.greeks("p", S=1000, K=100, T=0.5, r=0.05, sigma=0.20)
+        d = g["delta"]
+        assert isinstance(d, float)
+        assert d < 0.0, f"put delta lost sign at deep OTM via greeks() (got {d:e})"
+        assert 0.0 < abs(d) < 1e-50
+
+
+class TestParallelDispatch:
+    """Exercise the rayon-parallel branch of `bsm_greeks` (above N=4096).
+
+    The parallel branch in `crates/core/src/lib.rs` collects 5-tuples in
+    rayon, then unzips serially into the five output Vecs. The Rust-level
+    parity test (`greeks::tests::all_matches_individual_at_grid`) covers
+    `greeks::all` itself; this test covers the dispatch + unzip path at
+    the FFI boundary, at a batch size above `GREEKS_PARALLEL_THRESHOLD`.
+    """
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_greeks_above_threshold_matches_individual(self, flag: str) -> None:
+        # Parametrized over flag because the put arm of `greeks::all` uses
+        # different cdf calls (`cdf(-d1)` / `cdf(-d2)`) than the call arm,
+        # and would silently regress if only the call path were tested.
+        n = 8192  # > GREEKS_PARALLEL_THRESHOLD (4096)
+        K = np.linspace(80, 120, n)
+        S, T, r, sigma = 100.0, 0.5, 0.05, 0.20
+        # Bundled, goes through the rayon parallel branch.
+        g = bs.greeks(flag, S=S, K=K, T=T, r=r, sigma=sigma)
+        # The per-Greek functions stay serial regardless of N. They use the
+        # same `greeks::all`-compatible formulas, so should match the
+        # bundled output to f64 (`greeks::tests::all_matches_individual_*`
+        # proves the Rust-level parity at 1e-15).
+        np.testing.assert_allclose(
+            g["delta"], bs.delta(flag, S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            g["gamma"], bs.gamma(S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(g["vega"], bs.vega(S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14)
+        np.testing.assert_allclose(
+            g["theta"], bs.theta(flag, S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            g["rho"], bs.rho(flag, S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )

@@ -157,7 +157,28 @@ def implied_vol(
 
     Uses the Jäckel "Let's Be Rational" algorithm: converges to ~1e-13
     precision in at most two Householder iterations across the full
-    no-arbitrage range.
+    no-arbitrage range, on **well-posed inputs** (see caveat below).
+
+    Batches of ~1000 rows or more run on rayon's global thread pool with
+    the GIL released. Set ``RAYON_NUM_THREADS=1`` in the environment to
+    force serial execution — useful when calling pyvolr from inside a
+    caller-managed thread pool that already saturates the cores.
+
+    .. note::
+
+       **Ill-conditioned inverse cases.** When the option price equals its
+       intrinsic value to f64 precision — typically deep ITM with very
+       short expiry — the price carries no signal about volatility. The
+       solver returns the sigma that *matches the price* to f64 (correct), but
+       this sigma may differ substantially from the sigma that produced the price.
+       This is a property of the inverse problem, not the algorithm:
+       distinguishing sigma=5% from sigma=50% on a 1000-strike call expiring in
+       3 days is below the representable precision of the price itself.
+
+       In practice this affects strikes where ``|S/K|`` is far from 1
+       *and* ``T`` is small. If your workflow surfaces this, round-trip
+       the result through ``bs.price`` to verify; a mismatch in sigma with a
+       matching price is the ill-conditioning signature.
 
     Returns NaN where:
       - the target price is outside the no-arbitrage bounds,
@@ -182,13 +203,21 @@ def greeks(
 ) -> dict[str, Any]:
     """Compute the standard five Greeks at once. Returns a dict.
 
-    Slightly more efficient than calling each Greek separately because the
-    broadcast and flag-normalization happen once.
+    Single FFI call into a shared Rust kernel that computes `d1`/`d2`, the
+    discount factors, `cdf(d1)`/`cdf(d2)`, and `pdf(d1)` once and reuses them
+    across all five Greeks — ~3x faster than calling each Greek separately.
+
+    Batches of ~4000 rows or more run on rayon's global thread pool with the
+    GIL released. Set ``RAYON_NUM_THREADS=1`` in the environment to force
+    serial execution.
     """
+    flat, shape = broadcast_f64(S, K, T, r, q, sigma)
+    flag_arr = normalize_flag(flag, shape).ravel()
+    d, g, v, th, rh = _core.bsm_greeks(flag_arr, *flat)
     return {
-        "delta": delta(flag, S, K, T, r, sigma, q),
-        "gamma": gamma(S, K, T, r, sigma, q),
-        "theta": theta(flag, S, K, T, r, sigma, q),
-        "vega": vega(S, K, T, r, sigma, q),
-        "rho": rho(flag, S, K, T, r, sigma, q),
+        "delta": scalar_or_array(d, shape),
+        "gamma": scalar_or_array(g, shape),
+        "theta": scalar_or_array(th, shape),
+        "vega": scalar_or_array(v, shape),
+        "rho": scalar_or_array(rh, shape),
     }

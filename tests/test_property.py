@@ -235,3 +235,68 @@ class TestBlack76IvRoundtrip:
         # See `TestIvRoundtrip.test_iv_recovers_sigma_when_well_conditioned`
         # for the rationale on the 1e-10 bound under hypothesis's thorough profile.
         assert iv == pytest.approx(sigma, rel=1e-10)
+
+
+@pytest.mark.property
+class TestBundledGreeksMatchIndividual:
+    """The bundled `bs.greeks()` / `black76.greeks()` (audit F1: single-pass
+    kernel + F4b: rayon-parallel above N=4096) must agree with the per-Greek
+    functions across the input distribution. This catches any drift in
+    `greeks::all` / `black76::all` from the per-Greek formulas under
+    hypothesis-generated inputs, complementing the Rust-side parity tests
+    (`greeks::tests::all_matches_individual_at_grid`) and the fixed-point
+    Python tests in `test_greeks.py` / `test_black76.py`.
+    """
+
+    @given(spot, strike, ttm, rate, yield_, vol, flag)
+    def test_bs_bundled_matches_individual(
+        self, s: float, k: float, t: float, r: float, q: float, sigma: float, fl: str
+    ) -> None:
+        g = bs.greeks(fl, S=s, K=k, T=t, r=r, sigma=sigma, q=q)
+        # Bundle uses `greeks::all`; per-Greek uses `greeks::delta` etc.
+        # They share the same arithmetic so the difference should be at
+        # the rounding floor (~1 ULP).
+        assert g["delta"] == pytest.approx(
+            bs.delta(fl, S=s, K=k, T=t, r=r, sigma=sigma, q=q), rel=1e-13, abs=1e-15
+        )
+        assert g["gamma"] == pytest.approx(
+            bs.gamma(S=s, K=k, T=t, r=r, sigma=sigma, q=q), rel=1e-13, abs=1e-15
+        )
+        assert g["vega"] == pytest.approx(
+            bs.vega(S=s, K=k, T=t, r=r, sigma=sigma, q=q), rel=1e-13, abs=1e-15
+        )
+        assert g["theta"] == pytest.approx(
+            bs.theta(fl, S=s, K=k, T=t, r=r, sigma=sigma, q=q), rel=1e-13, abs=1e-15
+        )
+        assert g["rho"] == pytest.approx(
+            bs.rho(fl, S=s, K=k, T=t, r=r, sigma=sigma, q=q), rel=1e-13, abs=1e-15
+        )
+
+    @given(
+        forward,
+        st.floats(min_value=0.5, max_value=2.0, allow_nan=False),
+        ttm,
+        rate,
+        vol,
+        flag,
+    )
+    def test_black76_bundled_matches_individual(
+        self, f: float, k_ratio: float, t: float, r: float, sigma: float, fl: str
+    ) -> None:
+        k = f * k_ratio
+        g = black76.greeks(fl, F=f, K=k, T=t, r=r, sigma=sigma)
+        assert g["delta"] == pytest.approx(
+            black76.delta(fl, F=f, K=k, T=t, r=r, sigma=sigma), rel=1e-13, abs=1e-15
+        )
+        assert g["gamma"] == pytest.approx(
+            black76.gamma(F=f, K=k, T=t, r=r, sigma=sigma), rel=1e-13, abs=1e-15
+        )
+        assert g["vega"] == pytest.approx(
+            black76.vega(F=f, K=k, T=t, r=r, sigma=sigma), rel=1e-13, abs=1e-15
+        )
+        assert g["theta"] == pytest.approx(
+            black76.theta(fl, F=f, K=k, T=t, r=r, sigma=sigma), rel=1e-13, abs=1e-15
+        )
+        assert g["rho"] == pytest.approx(
+            black76.rho(fl, F=f, K=k, T=t, r=r, sigma=sigma), rel=1e-13, abs=1e-15
+        )

@@ -306,6 +306,9 @@ wheelhouse/
 # pytest-benchmark output (written by bench.yml workflow)
 bench.json
 
+# Local bench output cache (written by bench/compare_*.py)
+bench/.*_results.json
+
 # cargo-fuzz artifacts (corpus, crashes, build cache)
 fuzz/target/
 fuzz/artifacts/
@@ -314,3 +317,6 @@ fuzz/coverage/
 
 # Local-only working notes (not for commit)
 TODO.md
+
+# Bench result cache (machine-specific; reproducible via bench/compare_competitors.py bench)
+bench/.competitor_results.json

@@ -32,7 +32,11 @@ pub fn delta(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> 
     let disc_q = (-q * t).exp();
     match flag {
         Flag::Call => disc_q * cdf(d1),
-        Flag::Put => disc_q * (cdf(d1) - 1.0),
+        // `-cdf(-d1)` routes via the `erfcx` tail when d1 is large positive,
+        // keeping put delta f64-precise on deep-OTM strikes. The natural
+        // `cdf(d1) - 1.0` form cancels catastrophically there (cdf(d1)
+        // saturates to 1.0 once `1 - cdf(d1) < f64::EPSILON`, around d1 ≈ 8).
+        Flag::Put => -disc_q * cdf(-d1),
     }
 }
 
@@ -84,6 +88,63 @@ pub fn rho(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f6
         Flag::Call => k * t * disc_r * cdf(d2),
         Flag::Put => -k * t * disc_r * cdf(-d2),
     }
+}
+
+/// Compute all five Greeks in a single pass, sharing the `d1_d2`, `disc_q`,
+/// `disc_r`, `cdf`, and `pdf` evaluations that would otherwise be repeated
+/// across `delta`/`gamma`/`vega`/`theta`/`rho`. Returns `(delta, gamma, vega,
+/// theta, rho)`. Numerically identical to calling the per-Greek functions
+/// individually (verified by `tests::all_matches_individual_*`).
+pub fn all(
+    flag: Flag,
+    s: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    q: f64,
+    sigma: f64,
+) -> (f64, f64, f64, f64, f64) {
+    // Degenerate regime: delta has a non-zero limiting step; all others vanish.
+    // Defer to `delta` so the textbook step value (`±disc_q` ITM, `0` OTM) is
+    // computed in exactly one place.
+    if t <= 0.0 || sigma <= 0.0 {
+        return (delta(flag, s, k, t, r, q, sigma), 0.0, 0.0, 0.0, 0.0);
+    }
+    let (d1, d2) = d1_d2(s, k, t, r, q, sigma);
+    let sqrt_t = t.sqrt();
+    let disc_q = (-q * t).exp();
+    let disc_r = (-r * t).exp();
+    let pd1 = pdf(d1);
+    let nd1 = cdf(d1);
+    let nd2 = cdf(d2);
+
+    let (delta_v, theta_v, rho_v) = match flag {
+        Flag::Call => {
+            let common = -s * disc_q * pd1 * sigma / (2.0 * sqrt_t);
+            (
+                disc_q * nd1,
+                common - r * k * disc_r * nd2 + q * s * disc_q * nd1,
+                k * t * disc_r * nd2,
+            )
+        }
+        Flag::Put => {
+            // Use `cdf(-d1)` / `cdf(-d2)` directly throughout (delta, theta,
+            // rho) so the `erfcx`-tail branch handles large `|d1|` / `|d2|`
+            // without precision loss — `cdf(d1) - 1.0` cancels catastrophically
+            // for deep-OTM puts (d1 large positive, cdf(d1) saturates to 1.0).
+            let neg_nd1 = cdf(-d1);
+            let neg_nd2 = cdf(-d2);
+            let common = -s * disc_q * pd1 * sigma / (2.0 * sqrt_t);
+            (
+                -disc_q * neg_nd1,
+                common + r * k * disc_r * neg_nd2 - q * s * disc_q * neg_nd1,
+                -k * t * disc_r * neg_nd2,
+            )
+        }
+    };
+    let gamma_v = disc_q * pd1 / (s * sigma * sqrt_t);
+    let vega_v = s * disc_q * pd1 * sqrt_t;
+    (delta_v, gamma_v, vega_v, theta_v, rho_v)
 }
 
 #[cfg(test)]
@@ -151,5 +212,90 @@ mod tests {
         let analytical = theta(Flag::Call, s, k, t, r, q, sigma);
         let fd = finite_diff(|x| price(Flag::Call, s, k, x, r, q, sigma), t, 1e-5);
         assert_relative_eq!(analytical, -fd, epsilon = 1e-5);
+    }
+
+    /// Drift guard: `all()` must agree with the per-Greek functions bit-for-bit
+    /// across both option flags, including the t<=0 / sigma<=0 degenerate paths.
+    /// Tolerances are tight (relative 0 or 1e-15) because `all()` shares the
+    /// same subexpressions, so floating-point rounding lines up exactly.
+    #[test]
+    fn all_matches_individual_at_grid() {
+        let grid: &[(f64, f64, f64, f64, f64, f64)] = &[
+            (100.0, 100.0, 1.0, 0.05, 0.0, 0.20),
+            (100.0, 105.0, 0.5, 0.05, 0.02, 0.25),
+            (100.0, 80.0, 0.05, 0.03, 0.01, 0.45),
+            (100.0, 200.0, 0.5, 0.05, 0.0, 0.30), // deep OTM call
+            (1000.0, 100.0, 0.01, 0.05, 0.0, 0.20), // deep ITM call
+        ];
+        for &(s, k, t, r, q, sigma) in grid {
+            for &flag in &[Flag::Call, Flag::Put] {
+                let (d, g, v, th, rh) = all(flag, s, k, t, r, q, sigma);
+                assert_relative_eq!(d, delta(flag, s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(g, gamma(s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(v, vega(s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(th, theta(flag, s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(rh, rho(flag, s, k, t, r, q, sigma), max_relative = 1e-15);
+            }
+        }
+    }
+
+    /// Deep-OTM put precision: when `d1` is large positive, `cdf(d1)` rounds
+    /// to exactly `1.0` in f64 (since `1 − cdf(d1) < ε`), so the old form
+    /// `cdf(d1) − 1.0` evaluates to `0.0` exactly and put delta drops its
+    /// sign and magnitude. The fix routes through `−cdf(−d1)`, where the
+    /// `erfcx` tail in `normal::cdf` keeps the value f64-precise.
+    #[test]
+    fn put_delta_deep_otm_retains_precision() {
+        // S=1000, K=100 (10x OTM put), T=0.5y, σ=20% → d1 ≈ 16.5.
+        // cdf(16.5) saturates to 1.0; cdf(-16.5) ≈ 1.5e-61 via erfcx.
+        let pd = delta(Flag::Put, 1000.0, 100.0, 0.5, 0.05, 0.0, 0.20);
+        // Must be strictly negative (the old form returned exactly 0.0).
+        assert!(
+            pd < 0.0,
+            "put delta lost sign at deep OTM (returned {pd:e}); old `cdf(d1) - 1.0` form"
+        );
+        // Must be tiny but non-zero — the call delta is essentially exp(-qT)=1
+        // here, so the put delta is essentially -1·(1 - cdf(d1)) ≈ -1.5e-61.
+        assert!(
+            pd.abs() < 1e-50,
+            "put delta should be ~1e-61 at deep OTM, got {pd:e}"
+        );
+        assert!(pd.abs() > 0.0, "put delta underflowed to zero ({pd:e})");
+    }
+
+    /// Identity guard: `call_delta − put_delta = exp(−qT)` for all inputs
+    /// (this is `d(C−P)/dS` from put-call parity, since `C−P = S·exp(−qT) − K·exp(−rT)`).
+    /// The new put-delta form preserves this identity to f64 even where the
+    /// old form failed (call delta is correct in both forms; only put delta
+    /// changes, and the identity is now exact at deep OTM too).
+    #[test]
+    fn put_call_delta_parity_holds_at_deep_otm() {
+        let (s, k, t, r, q, sigma) = (1000.0, 100.0, 0.5, 0.05, 0.0, 0.20);
+        let cd = delta(Flag::Call, s, k, t, r, q, sigma);
+        let pd = delta(Flag::Put, s, k, t, r, q, sigma);
+        let disc_q = (-q * t).exp();
+        // call_delta + |put_delta| = exp(-qT) (since put_delta is negative).
+        assert_relative_eq!(cd - pd, disc_q, max_relative = 1e-15);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn all_matches_individual_degenerate() {
+        // t == 0 and sigma == 0 paths.
+        let degenerate: &[(f64, f64, f64, f64, f64, f64)] = &[
+            (110.0, 100.0, 0.0, 0.05, 0.0, 0.20), // t = 0, ITM call
+            (90.0, 100.0, 0.0, 0.05, 0.0, 0.20),  // t = 0, OTM call / ITM put
+            (100.0, 100.0, 1.0, 0.05, 0.0, 0.0),  // sigma = 0
+        ];
+        for &(s, k, t, r, q, sigma) in degenerate {
+            for &flag in &[Flag::Call, Flag::Put] {
+                let (d, g, v, th, rh) = all(flag, s, k, t, r, q, sigma);
+                assert_eq!(d, delta(flag, s, k, t, r, q, sigma));
+                assert_eq!(g, gamma(s, k, t, r, q, sigma));
+                assert_eq!(v, vega(s, k, t, r, q, sigma));
+                assert_eq!(th, theta(flag, s, k, t, r, q, sigma));
+                assert_eq!(rh, rho(flag, s, k, t, r, q, sigma));
+            }
+        }
     }
 }

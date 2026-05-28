@@ -17,27 +17,54 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
 
 ## ⚡ Performance
 
+<table>
+<tr>
+<td>
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-dark.svg">
-  <img alt="BSM call pricing throughput: pyvolr vs py_vollib, log-log scaling by array size" src="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-competitors-time-dark.svg">
+  <img alt="Time per call: pyvolr vs the active BSM-pricing ecosystem, log-log by array size" src="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-competitors-time-light.svg">
 </picture>
 
-| Scenario                      |   pyvolr | py_vollib | speedup |
-| ----------------------------- | -------: | --------: | ------: |
-| `bs.price`, scalar            |   4.1 µs |    2.2 µs |    0.5× |
-| `bs.price`, 1k strikes        |  29.3 µs |   2.32 ms |     79× |
-| `bs.price`, 10k strikes       |   188 µs |  23.32 ms |    124× |
-| `bs.price`, 100k strikes      |  1.67 ms | 234.91 ms |    141× |
-| `bs.price`, 1M strikes        | 17.46 ms |  2,350 ms |    135× |
-| `bs.greeks` (all 5), 10k      |   671 µs |  89.95 ms |    134× |
-| `bs.implied_vol`, scalar      |   4.4 µs |   15.0 µs |    3.4× |
-| `black76.price`, scalar       |   3.7 µs |    2.2 µs |    0.6× |
-| `black76.price`, 10k strikes  |   177 µs |  23.19 ms |    131× |
-| `black76.implied_vol`, scalar |   4.0 µs |   14.7 µs |    3.7× |
+</td>
+<td>
 
-Vectorize anything you can — that's where pyvolr wins. For a single scalar `price` call, py_vollib's pure-Python path edges out pyvolr because the PyO3 FFI roundtrip + numpy broadcasting setup costs a few microseconds; even a 2-element array call already favors pyvolr. Black-76's profile tracks BSM's exactly because the Rust core delegates to `bsm::price` with `q=r` rather than duplicating math.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-competitors-thru-dark.svg">
+  <img alt="Throughput: pyvolr vs the active BSM-pricing ecosystem, log-log by array size" src="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-competitors-thru-light.svg">
+</picture>
 
-Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.2 vs py_vollib 1.0.1.
+</td>
+</tr>
+</table>
+
+Six libraries on the chart: **`pyvolr`**, [`vollib`](https://pypi.org/project/vollib/) (resurrected upstream of `py_vollib`, pure Python), [`py_vollib_vectorized`](https://pypi.org/project/py_vollib_vectorized/) (numba), [`blackscholes`](https://pypi.org/project/blackscholes/) (pure Python, object-per-call), [`QuantLib`](https://pypi.org/project/QuantLib/) (C++ core, looped scalar), and [`quantforge`](https://pypi.org/project/quantforge/) (Rust + SIMD).
+
+pyvolr leads at every input size up to ~1M strikes. **quantforge overtakes at very large batches** via explicit SIMD vectorisation — the same axis [fast-vollib](https://arxiv.org/abs/2604.27210) takes with Triton kernels. pyvolr's positioning is explicitly the "Rust-cored CPU option" — no `unsafe` SIMD intrinsics, no GPU dependency, abi3 wheel ships in one file. If you're pricing 10M+ strikes per call and CPU-only, prefer quantforge.
+
+| Scenario                       |   pyvolr |  py_vollib |  speedup |
+| ------------------------------ | -------: | ---------: | -------: |
+| `bs.price`, scalar             |   4.2 µs |     2.2 µs |     0.5× |
+| `bs.price`, 1k strikes         |  24.6 µs |    2.32 ms |      94× |
+| `bs.price`, 10k strikes        |   153 µs |   23.32 ms |     152× |
+| `bs.price`, 100k strikes       |  1.39 ms |  234.91 ms |     169× |
+| `bs.price`, 1M strikes         | 14.54 ms |   2,350 ms |     162× |
+| `bs.greeks` (all 5), 10k       |   273 µs |   89.95 ms |     330× |
+| `bs.implied_vol`, scalar       |   4.4 µs |    15.0 µs |     3.4× |
+| `bs.implied_vol`, 10k strikes  |   465 µs |   128 ms ¹ |     275× |
+| `black76.price`, scalar        |   3.7 µs |     2.2 µs |     0.6× |
+| `black76.price`, 10k strikes   |   141 µs |   23.19 ms |     164× |
+| `black76.implied_vol`, scalar  |   3.9 µs |    14.7 µs |     3.8× |
+
+¹ py_vollib's `implied_volatility` is scalar-only; the 10k figure is `N` × scalar measured via `compare_py_vollib.py`. pyvolr's vectorised path parallelises automatically above N=1024 via rayon — set `RAYON_NUM_THREADS=1` to force serial.
+
+The table above is the headline-vs-the-abandoned-upstream comparison (py_vollib's last release is broken on Python 3.12+, see [docs/why.md](docs/why.md)). For the workload most people actually run — a smile, an option chain, an IV snapshot — pyvolr is faster than every actively-maintained alternative and installs cleanly on every modern Python.
+
+`bs.greeks` returning all five Greeks at once uses a single-pass Rust kernel that shares `d1`/`d2`, discount factors, `cdf`, and `pdf` across the five outputs — ~3× faster than the equivalent five separate calls. For batches ≥4096 rows, the work also dispatches across CPU cores in parallel.
+
+**Numerical agreement:** pyvolr matches every library above to f64 precision (~1e-13 relative) on every well-posed input across price + 5 Greeks + IV. At deep-OTM short-expiry corners pyvolr is *more* precise than the rest — `blackscholes` and `quantforge` underflow to zero where pyvolr's `erfcx`-based cdf retains the ~1e-50 price; QuantLib and the alternatives lose 1-2 digits. Run `python bench/sanity_check_competitors.py` in each venv to re-validate.
+
+Reproduce the table with `python bench/compare_py_vollib.py`; reproduce the chart with `python bench/compare_competitors.py bench` then `python bench/compare_competitors.py chart` (across the Python 3.11 + 3.12 venvs documented in the script's docstring). Library versions: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.2 / py_vollib 1.0.1 (table) / vollib 1.0.7 / py_vollib_vectorized 0.1.1 / blackscholes 0.2.0 / QuantLib 1.42.1 / quantforge 0.1.1 (chart).
 
 ## 📦 Install
 
@@ -110,6 +137,7 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 - **Black-76 pricing** — European options on futures/forwards (`pyvolr.black76`), same vectorized API as `bs`
 - **Analytical Greeks** — delta, gamma, theta, vega, rho (with documented sign and unit conventions)
 - **Robust implied volatility** — Jäckel "Let's Be Rational" algorithm: rational-cubic initial guess plus Householder order-4 iteration converges to ~1e-13 precision in ≤2 iterations across the full no-arbitrage range
+- **Automatic parallelism on large batches** — `implied_vol` (above N≈1,000 rows) and the bundled `greeks` kernel (above N≈4,000) release the GIL and dispatch per-row work to rayon's global thread pool; set `RAYON_NUM_THREADS=1` to opt out
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
 - **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree (including `py_vollib.black`) for one-import-line migration
 - **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
@@ -121,7 +149,7 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 - [ ] Drop-in compat shim for `py_vollib_vectorized` (`vectorized_*` API + `price_dataframe`/`get_all_greeks`, pandas as soft dep)
 - [ ] Bachelier (normal model, for negative rates)
 - [ ] Higher-order Greeks (vanna, vomma, charm, speed, zomma, color)
-- [ ] SIMD batch evaluation + `rayon` parallelism for large arrays
+- [ ] SIMD batch evaluation
 - [ ] American options (CRR binomial → finite difference)
 - [ ] Volatility surface fitting (SVI, SSVI)
 
@@ -164,6 +192,10 @@ pyvolr/
 │   │   ├── iv.rs            # Jäckel "Let's Be Rational" IV solver (Householder-4, ≤2 iters)
 │   │   └── normal.rs        # Φ / φ, erfcx (Lentz CF), inverse CDF (Wichura AS241)
 │   └── benches/             # criterion benches gating the README's perf claims
+├── bench/                   # Python-level speed/precision scripts (dev-only, not in CI)
+│   ├── compare_py_vollib.py            # reproduces the perf table
+│   ├── compare_competitors.py          # reproduces the perf chart (6 libraries)
+│   └── sanity_check_competitors.py     # cross-validates numerical agreement
 ├── python/pyvolr/
 │   ├── bs.py                # BSM public API (numpy-broadcast wrappers)
 │   ├── black76.py           # Black-76 public API

@@ -1,8 +1,10 @@
 """Type stubs for the pyvolr._core Rust extension.
 
-All functions take flat (1-D, contiguous) numpy arrays of equal length and
-return a numpy float64 array of the same length. The Python wrapper in
-``pyvolr.bs`` is responsible for broadcasting and reshape.
+All functions take flat (1-D, contiguous) numpy arrays of equal length.
+Most return a single numpy float64 array of the same length; the bundled
+``bsm_greeks`` / ``black76_greeks`` entry points return a 5-tuple of such
+arrays (one per Greek). The Python wrapper in ``pyvolr.bs`` /
+``pyvolr.black76`` is responsible for broadcasting and reshape.
 """
 
 from __future__ import annotations
@@ -73,6 +75,21 @@ def bsm_iv(
     r: NDArray[np.float64],
     q: NDArray[np.float64],
 ) -> NDArray[np.float64]: ...
+def bsm_greeks(
+    flag: NDArray[np.int8],
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> tuple[
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+]: ...
 def black76_price(
     flag: NDArray[np.int8],
     f: NDArray[np.float64],
@@ -127,3 +144,17 @@ def black76_iv(
     t: NDArray[np.float64],
     r: NDArray[np.float64],
 ) -> NDArray[np.float64]: ...
+def black76_greeks(
+    flag: NDArray[np.int8],
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> tuple[
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+]: ...

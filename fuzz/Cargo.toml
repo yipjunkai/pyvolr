@@ -39,3 +39,17 @@ path = "fuzz_targets/black76_price.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "greeks_all"
+path = "fuzz_targets/greeks_all.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "black76_greeks_all"
+path = "fuzz_targets/black76_greeks_all.rs"
+test = false
+doc = false
+bench = false

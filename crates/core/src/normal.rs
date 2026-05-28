@@ -27,6 +27,11 @@ const INV_SQRT_PI: f64 = 0.564_189_583_547_756_3;
 ///
 /// The tail branch is marked `#[cold]` so LLVM lays out the fast path
 /// contiguously — most BSM-pricing calls hit `|x| < 4` (typical `d1`, `d2`).
+///
+/// A branchless alternative (always-erfcx form) was measured in the F2 audit
+/// (2026-05) and rejected: 14-69% slower across narrow/wide/shuffled inputs
+/// because `libm` is scalar and the outer branch doesn't gate vectorisation.
+/// See `bench_cdf_branch_experiment` in `benches/pricing.rs` if curious.
 #[inline]
 pub fn cdf(x: f64) -> f64 {
     if x.abs() < 4.0 {

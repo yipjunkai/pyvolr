@@ -169,3 +169,69 @@ class TestImpliedVol:
         # Upper bound for call: exp(-rT) * F.
         iv = black76.implied_vol(price=1e6, flag="c", F=100, K=100, T=1.0, r=0.05)
         assert np.isnan(iv)
+
+
+class TestPrecisionCorners:
+    """Python-level guards for the deep-OTM put-delta corner.
+
+    Mirror of the BSM tests in `test_greeks.py::TestPrecisionCorners`.
+    Black-76's `delta` and `greeks` route through `greeks::delta` /
+    `black76::all`, both touched by the put-delta fix (commit 30d5d1f).
+    """
+
+    def test_put_delta_deep_otm_retains_precision(self) -> None:
+        d = black76.delta("p", F=1000, K=100, T=0.5, r=0.05, sigma=0.20)
+        assert isinstance(d, float)
+        assert d < 0.0, f"put delta lost sign at deep OTM (got {d:e})"
+        assert 0.0 < abs(d) < 1e-50
+
+    def test_bundled_greeks_put_delta_deep_otm_retains_precision(self) -> None:
+        g = black76.greeks("p", F=1000, K=100, T=0.5, r=0.05, sigma=0.20)
+        d = g["delta"]
+        assert isinstance(d, float)
+        assert d < 0.0, f"put delta lost sign at deep OTM via greeks() (got {d:e})"
+        assert 0.0 < abs(d) < 1e-50
+
+
+class TestParallelDispatch:
+    """Exercise the rayon-parallel branch of `black76_greeks` (above N=4096)
+    and `black76_iv` (above N=1024).
+
+    Mirrors the BSM tests in `test_greeks.py` / `test_iv.py`: the
+    Rust-level parity (`black76::tests::all_matches_individual_at_grid`)
+    covers `black76::all` itself; these tests cover the PyO3 dispatch +
+    tuple-unzip path at the FFI boundary, for both call and put flags.
+    """
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_greeks_above_threshold_matches_individual(self, flag: str) -> None:
+        n = 8192  # > GREEKS_PARALLEL_THRESHOLD (4096)
+        K = np.linspace(80, 120, n)
+        F, T, r, sigma = 100.0, 0.5, 0.05, 0.20
+        g = black76.greeks(flag, F=F, K=K, T=T, r=r, sigma=sigma)
+        np.testing.assert_allclose(
+            g["delta"], black76.delta(flag, F=F, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            g["gamma"], black76.gamma(F=F, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            g["vega"], black76.vega(F=F, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            g["theta"], black76.theta(flag, F=F, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            g["rho"], black76.rho(flag, F=F, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
+        )
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_iv_above_threshold(self, flag: str) -> None:
+        n = 2048  # > PARALLEL_THRESHOLD (1024)
+        K = np.linspace(80, 120, n)
+        F, T, r, sigma = 100.0, 0.5, 0.05, 0.20
+        prices = black76.price(flag, F=F, K=K, T=T, r=r, sigma=sigma)
+        ivs = black76.implied_vol(prices, flag, F=F, K=K, T=T, r=r)
+        assert isinstance(ivs, np.ndarray)
+        assert ivs.shape == (n,)
+        np.testing.assert_allclose(ivs, sigma, rtol=1e-12)

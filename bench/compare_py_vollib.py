@@ -82,10 +82,18 @@ strikes_100k = np.linspace(80.0, 120.0, 100_000)
 strikes_1m = np.linspace(80.0, 120.0, 1_000_000)
 
 ref_price = pv.price("c", S=S, K=K, T=T, r=r, sigma=sigma)
+# Per-row reference prices for the vectorised IV scenario below. py_vollib
+# has no vectorised IV API, so the comparison loops scalar calls (10k of them
+# per repetition — slow, hence the low `reps` count in that scenario).
+strikes_10k_prices = pv.price("c", S=S, K=strikes_10k, T=T, r=r, sigma=sigma)
 
 
 def pvol_array_price(strikes):
     return np.array([pvol_price("c", S, k, T, r, sigma) for k in strikes])
+
+
+def pvol_array_iv(targets, strikes):
+    return [pvol_iv(p, S, k, T, r, "c") for p, k in zip(targets, strikes, strict=True)]
 
 
 def pvol_array_greeks(strikes):
@@ -150,6 +158,14 @@ scenarios = [
         lambda: pv.implied_vol(price=ref_price, flag="c", S=S, K=K, T=T, r=r),
         lambda: pvol_iv(ref_price, S, K, T, r, "c"),
         5_000,
+    ),
+    (
+        # py_vollib has no vectorised IV — comparison column is 10k scalar
+        # calls per rep, so keep `reps` low to avoid blowing wall time.
+        "implied_vol, 10k strikes",
+        lambda: pv.implied_vol(price=strikes_10k_prices, flag="c", S=S, K=strikes_10k, T=T, r=r),
+        lambda: pvol_array_iv(strikes_10k_prices, strikes_10k),
+        5,
     ),
     # Black-76 rows: structurally identical machinery (the Rust core delegates
     # to bsm::price with q=r), so expect speedups very close to the BSM rows.

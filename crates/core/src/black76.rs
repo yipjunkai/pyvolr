@@ -18,8 +18,9 @@
 //!
 //! Put-call parity: `C - P = exp(-r*T) * (F - K)`.
 
-use crate::bsm::{price as bsm_price, Flag};
+use crate::bsm::{d1_d2, price as bsm_price, Flag};
 use crate::greeks;
+use crate::normal::{cdf, pdf};
 
 /// European Black-76 option price on a futures/forward `f` with strike `k`.
 ///
@@ -59,6 +60,63 @@ pub fn theta(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
 /// an extra `K*t*disc_r*N(d2)`-style term that doesn't exist in Black-76.
 pub fn rho(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
     -t * price(flag, f, k, t, r, sigma)
+}
+
+/// Compute all five Black-76 Greeks in a single pass. Shares the `d1_d2`,
+/// discount factor, `cdf`, and `pdf` evaluations across delta/gamma/vega/
+/// theta, and reuses the rebuilt call/put price to derive rho (= `-T·price`).
+/// Numerically identical to calling the per-Greek functions individually.
+pub fn all(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> (f64, f64, f64, f64, f64) {
+    // Degenerate regime: defer delta to its existing scalar path, and rho stays
+    // `-T·price` (Black-76 rho is defined off the price, not the d1/d2 form).
+    if t <= 0.0 || sigma <= 0.0 {
+        let delta_v = greeks::delta(flag, f, k, t, r, r, sigma);
+        let price_v = bsm_price(flag, f, k, t, r, r, sigma);
+        return (delta_v, 0.0, 0.0, 0.0, -t * price_v);
+    }
+    // Black-76 specialises BSM with q = r, so disc_q == disc_r and the r-q
+    // drift in d1 vanishes.
+    let (d1, d2) = d1_d2(f, k, t, r, r, sigma);
+    let sqrt_t = t.sqrt();
+    let disc = (-r * t).exp();
+    let pd1 = pdf(d1);
+    let nd1 = cdf(d1);
+    let nd2 = cdf(d2);
+
+    let (delta_v, theta_v, price_v) = match flag {
+        Flag::Call => {
+            let common = -f * disc * pd1 * sigma / (2.0 * sqrt_t);
+            (
+                disc * nd1,
+                common - r * k * disc * nd2 + r * f * disc * nd1,
+                // Mirror `bsm::price`'s arithmetic ordering exactly
+                // (`f * disc * nd1 - k * disc * nd2`, NOT `disc * (f*nd1 -
+                // k*nd2)`). At deep OTM the two associations produce
+                // different f64 values due to cancellation; matching
+                // `bsm::price` keeps `rho_v` bit-equal to the standalone
+                // `rho()` path (which routes through `bsm_price`).
+                f * disc * nd1 - k * disc * nd2,
+            )
+        }
+        Flag::Put => {
+            // Same f64-precision argument as `greeks::all`: route put delta
+            // through `cdf(-d1)` so the `erfcx` tail handles deep-OTM puts
+            // without the `cdf(d1) - 1.0` catastrophic cancellation.
+            let neg_nd1 = cdf(-d1);
+            let neg_nd2 = cdf(-d2);
+            let common = -f * disc * pd1 * sigma / (2.0 * sqrt_t);
+            (
+                -disc * neg_nd1,
+                common + r * k * disc * neg_nd2 - r * f * disc * neg_nd1,
+                // Same association-matching argument as the call arm.
+                k * disc * neg_nd2 - f * disc * neg_nd1,
+            )
+        }
+    };
+    let gamma_v = disc * pd1 / (f * sigma * sqrt_t);
+    let vega_v = f * disc * pd1 * sqrt_t;
+    let rho_v = -t * price_v;
+    (delta_v, gamma_v, vega_v, theta_v, rho_v)
 }
 
 #[cfg(test)]
@@ -198,5 +256,72 @@ mod tests {
         // — this matches `-dP/dT` only after sign and `r-q` cancellation; see bsm::greeks
         // for the convention. Here, we verify against `-dP/dT` directly.
         assert_relative_eq!(analytical, -fd, epsilon = 1e-5);
+    }
+
+    /// Drift guard: `all()` must agree with the per-Greek functions across
+    /// both flags and across both regular and degenerate input regimes.
+    ///
+    /// Includes a deep-OTM put cell where the `f*N(d1) - k*N(d2)` cancellation
+    /// inside Black-76 rho is large enough that the choice between
+    /// `disc * (f*nd1 - k*nd2)` and `f*disc*nd1 - k*disc*nd2` produces visibly
+    /// different f64 values. `all` mirrors `bsm::price`'s second association
+    /// so `rho_v = -t * price_v` stays bit-equal to the standalone path.
+    #[test]
+    fn all_matches_individual_at_grid() {
+        let grid: &[(f64, f64, f64, f64, f64)] = &[
+            (100.0, 100.0, 1.0, 0.05, 0.20),
+            (49.0, 50.0, 0.3846, 0.05, 0.20),
+            (100.0, 200.0, 0.5, 0.05, 0.30),
+            (1000.0, 100.0, 0.01, 0.05, 0.20),
+            // Deep-OTM corner reached by the fuzz harness: price ~ 1e-15,
+            // catches the `f*nd1 - k*nd2` cancellation asymmetry on rho.
+            (10.0, 100.0, 0.5, 0.05, 0.20),
+        ];
+        for &(f, k, t, r, sigma) in grid {
+            for &flag in &[Flag::Call, Flag::Put] {
+                let (d, g, v, th, rh) = all(flag, f, k, t, r, sigma);
+                assert_relative_eq!(d, delta(flag, f, k, t, r, sigma), max_relative = 1e-15);
+                assert_relative_eq!(g, gamma(f, k, t, r, sigma), max_relative = 1e-15);
+                assert_relative_eq!(v, vega(f, k, t, r, sigma), max_relative = 1e-15);
+                assert_relative_eq!(th, theta(flag, f, k, t, r, sigma), max_relative = 1e-15);
+                assert_relative_eq!(rh, rho(flag, f, k, t, r, sigma), max_relative = 1e-15);
+            }
+        }
+    }
+
+    /// Deep-OTM put precision via `black76::all`. Mirrors the BSM regression
+    /// test (`greeks::tests::put_delta_deep_otm_retains_precision`): when
+    /// `d1` saturates so `cdf(d1) == 1.0` exactly, the old `nd1 - 1.0` form
+    /// returned `0.0` instead of the correct tiny-negative put delta. The
+    /// fix routes through `-cdf(-d1)` (erfcx tail).
+    #[test]
+    fn all_put_delta_deep_otm_retains_precision() {
+        // F=1000, K=100 (10x OTM put), T=0.5y, σ=20% → d1 ≈ 16.5.
+        let (d, _, _, _, _) = all(Flag::Put, 1000.0, 100.0, 0.5, 0.05, 0.20);
+        assert!(d < 0.0, "put delta lost sign at deep OTM (returned {d:e})");
+        assert!(
+            d.abs() < 1e-50 && d.abs() > 0.0,
+            "expected ~1e-61, got {d:e}"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn all_matches_individual_degenerate() {
+        let degenerate: &[(f64, f64, f64, f64, f64)] = &[
+            (110.0, 100.0, 0.0, 0.05, 0.2),
+            (90.0, 100.0, 0.0, 0.05, 0.2),
+            (100.0, 100.0, 1.0, 0.05, 0.0),
+        ];
+        for &(f, k, t, r, sigma) in degenerate {
+            for &flag in &[Flag::Call, Flag::Put] {
+                let (d, g, v, th, rh) = all(flag, f, k, t, r, sigma);
+                assert_eq!(d, delta(flag, f, k, t, r, sigma));
+                assert_eq!(g, gamma(f, k, t, r, sigma));
+                assert_eq!(v, vega(f, k, t, r, sigma));
+                assert_eq!(th, theta(flag, f, k, t, r, sigma));
+                assert_eq!(rh, rho(flag, f, k, t, r, sigma));
+            }
+        }
     }
 }

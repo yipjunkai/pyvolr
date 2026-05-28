@@ -38,6 +38,7 @@
     { "type": "deps", "section": "Dependencies" },
     { "type": "revert", "section": "Reverts" },
     { "type": "docs", "section": "Documentation" },
+    { "type": "bench", "section": "Benchmarks" },
     { "type": "refactor", "section": "Refactoring", "hidden": true },
     { "type": "test", "section": "Tests", "hidden": true },
     { "type": "build", "section": "Build", "hidden": true },
