@@ -75,7 +75,9 @@ pyvolr leads at every input size up to ~1M strikes. **quantforge overtakes at ve
 
 For the workload most people actually run — a smile, an option chain, an IV snapshot — pyvolr is faster than every other actively-maintained alternative and installs cleanly on every modern Python.
 
-Reproduce with `python bench/compare_competitors.py bench` (across the Python 3.11 + 3.12 venvs documented in the script's docstring) then `python bench/compare_competitors.py chart`. Library versions: pyvolr 0.1.2 / vollib 1.0.7 / py_vollib_vectorized 0.1.1 / blackscholes 0.2.0 / QuantLib 1.42.1 / quantforge 0.1.1.
+**Numerical agreement:** pyvolr matches every library above to f64 precision (~1e-13 relative) on every well-posed input across price + 5 Greeks + IV. At deep-OTM short-expiry corners pyvolr is *more* precise than the rest — `blackscholes` and `quantforge` underflow to zero where pyvolr's `erfcx`-based cdf retains the ~1e-50 price; QuantLib and the alternatives lose 1-2 digits. Run `python bench/sanity_check_competitors.py` in each venv to re-validate.
+
+Reproduce the perf chart with `python bench/compare_competitors.py bench` (across the Python 3.11 + 3.12 venvs documented in the script's docstring) then `python bench/compare_competitors.py chart`. Library versions: pyvolr 0.1.2 / vollib 1.0.7 / py_vollib_vectorized 0.1.1 / blackscholes 0.2.0 / QuantLib 1.42.1 / quantforge 0.1.1.
 
 ## 📦 Install
 
