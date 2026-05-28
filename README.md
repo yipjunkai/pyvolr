@@ -115,6 +115,7 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 - **Black-76 pricing** — European options on futures/forwards (`pyvolr.black76`), same vectorized API as `bs`
 - **Analytical Greeks** — delta, gamma, theta, vega, rho (with documented sign and unit conventions)
 - **Robust implied volatility** — Jäckel "Let's Be Rational" algorithm: rational-cubic initial guess plus Householder order-4 iteration converges to ~1e-13 precision in ≤2 iterations across the full no-arbitrage range
+- **Automatic parallelism on large batches** — `implied_vol` (above N≈1,000 rows) and the bundled `greeks` kernel (above N≈4,000) release the GIL and dispatch per-row work to rayon's global thread pool; set `RAYON_NUM_THREADS=1` to opt out
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
 - **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree (including `py_vollib.black`) for one-import-line migration
 - **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
@@ -126,7 +127,7 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 - [ ] Drop-in compat shim for `py_vollib_vectorized` (`vectorized_*` API + `price_dataframe`/`get_all_greeks`, pandas as soft dep)
 - [ ] Bachelier (normal model, for negative rates)
 - [ ] Higher-order Greeks (vanna, vomma, charm, speed, zomma, color)
-- [ ] SIMD batch evaluation + `rayon` parallelism for large arrays
+- [ ] SIMD batch evaluation
 - [ ] American options (CRR binomial → finite difference)
 - [ ] Volatility surface fitting (SVI, SSVI)
 
