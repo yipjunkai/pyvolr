@@ -185,7 +185,9 @@ def greeks(
     """Compute the standard five Greeks at once. Returns a dict.
 
     Single FFI call into a shared Rust kernel — see `pyvolr.bs.greeks` for
-    the rationale.
+    the rationale. Batches of ~4000 rows or more parallelise on rayon's
+    global thread pool (GIL released); set ``RAYON_NUM_THREADS=1`` to
+    force serial.
     """
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()

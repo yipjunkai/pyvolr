@@ -31,6 +31,12 @@ use crate::bsm::Flag;
 /// thread pool that already saturates the cores).
 const PARALLEL_THRESHOLD: usize = 1024;
 
+/// Greeks have a much lower per-row cost (~19 ns for `greeks::all` vs
+/// ~280 ns for `iv::solve`), so the rayon overhead amortises later.
+/// Break-even is around N=2,600; threshold set comfortably above to
+/// ensure parallel always wins by a meaningful margin at the gate.
+const GREEKS_PARALLEL_THRESHOLD: usize = 4096;
+
 /// Return type of `bsm_greeks` / `black76_greeks`: `(delta, gamma, vega, theta, rho)`.
 type GreeksTuple<'py> = (
     Bound<'py, PyArray1<f64>>,
@@ -273,13 +279,8 @@ fn bsm_greeks<'py>(
         q.len(),
         sigma.len(),
     ])?;
-    let mut delta = Vec::with_capacity(n);
-    let mut gamma = Vec::with_capacity(n);
-    let mut vega = Vec::with_capacity(n);
-    let mut theta = Vec::with_capacity(n);
-    let mut rho = Vec::with_capacity(n);
-    for i in 0..n {
-        let (d, g, v, th, rh) = greeks::all(
+    let work = |i: usize| {
+        greeks::all(
             Flag::from_i8(flag[i]),
             s[i],
             k[i],
@@ -287,12 +288,36 @@ fn bsm_greeks<'py>(
             r[i],
             q[i],
             sigma[i],
-        );
-        delta.push(d);
-        gamma.push(g);
-        vega.push(v);
-        theta.push(th);
-        rho.push(rh);
+        )
+    };
+    let mut delta = Vec::with_capacity(n);
+    let mut gamma = Vec::with_capacity(n);
+    let mut vega = Vec::with_capacity(n);
+    let mut theta = Vec::with_capacity(n);
+    let mut rho = Vec::with_capacity(n);
+    if n >= GREEKS_PARALLEL_THRESHOLD {
+        // Parallel path: collect a 5-tuple per row in rayon, then unzip
+        // serially into the five output Vecs. The temp tuple Vec costs
+        // 40 bytes/row; unzip is N memcpy-equivalents, negligible.
+        let tuples: Vec<(f64, f64, f64, f64, f64)> =
+            py.detach(|| (0..n).into_par_iter().map(work).collect());
+        for (d, g, v, th, rh) in tuples {
+            delta.push(d);
+            gamma.push(g);
+            vega.push(v);
+            theta.push(th);
+            rho.push(rh);
+        }
+    } else {
+        // Serial path: write directly into the output Vecs, no temp alloc.
+        for i in 0..n {
+            let (d, g, v, th, rh) = work(i);
+            delta.push(d);
+            gamma.push(g);
+            vega.push(v);
+            theta.push(th);
+            rho.push(rh);
+        }
     }
     Ok((
         delta.into_pyarray(py),
@@ -322,19 +347,31 @@ fn black76_greeks<'py>(
     let r = r.as_slice()?;
     let sigma = sigma.as_slice()?;
     let n = check_len(&[flag.len(), f.len(), k.len(), t.len(), r.len(), sigma.len()])?;
+    let work = |i: usize| black76::all(Flag::from_i8(flag[i]), f[i], k[i], t[i], r[i], sigma[i]);
     let mut delta = Vec::with_capacity(n);
     let mut gamma = Vec::with_capacity(n);
     let mut vega = Vec::with_capacity(n);
     let mut theta = Vec::with_capacity(n);
     let mut rho = Vec::with_capacity(n);
-    for i in 0..n {
-        let (d, g, v, th, rh) =
-            black76::all(Flag::from_i8(flag[i]), f[i], k[i], t[i], r[i], sigma[i]);
-        delta.push(d);
-        gamma.push(g);
-        vega.push(v);
-        theta.push(th);
-        rho.push(rh);
+    if n >= GREEKS_PARALLEL_THRESHOLD {
+        let tuples: Vec<(f64, f64, f64, f64, f64)> =
+            py.detach(|| (0..n).into_par_iter().map(work).collect());
+        for (d, g, v, th, rh) in tuples {
+            delta.push(d);
+            gamma.push(g);
+            vega.push(v);
+            theta.push(th);
+            rho.push(rh);
+        }
+    } else {
+        for i in 0..n {
+            let (d, g, v, th, rh) = work(i);
+            delta.push(d);
+            gamma.push(g);
+            vega.push(v);
+            theta.push(th);
+            rho.push(rh);
+        }
     }
     Ok((
         delta.into_pyarray(py),

@@ -285,7 +285,10 @@ mod tests {
         // F=1000, K=100 (10x OTM put), T=0.5y, σ=20% → d1 ≈ 16.5.
         let (d, _, _, _, _) = all(Flag::Put, 1000.0, 100.0, 0.5, 0.05, 0.20);
         assert!(d < 0.0, "put delta lost sign at deep OTM (returned {d:e})");
-        assert!(d.abs() < 1e-50 && d.abs() > 0.0, "expected ~1e-61, got {d:e}");
+        assert!(
+            d.abs() < 1e-50 && d.abs() > 0.0,
+            "expected ~1e-61, got {d:e}"
+        );
     }
 
     #[test]

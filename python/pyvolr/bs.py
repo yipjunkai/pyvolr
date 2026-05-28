@@ -190,6 +190,10 @@ def greeks(
     Single FFI call into a shared Rust kernel that computes `d1`/`d2`, the
     discount factors, `cdf(d1)`/`cdf(d2)`, and `pdf(d1)` once and reuses them
     across all five Greeks — 3-5x faster than calling each Greek separately.
+
+    Batches of ~4000 rows or more run on rayon's global thread pool with the
+    GIL released. Set ``RAYON_NUM_THREADS=1`` in the environment to force
+    serial execution.
     """
     flat, shape = broadcast_f64(S, K, T, r, q, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()

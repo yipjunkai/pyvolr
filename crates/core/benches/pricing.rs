@@ -468,6 +468,7 @@ fn bench_bsm_price_flag_dispatch(c: &mut Criterion) {
 /// Parameterised over `N ∈ {100, 1_000, 10_000, 100_000}` so we can see:
 /// (a) the per-row cost vs rayon overhead break-even point, and
 /// (b) the N-core saturation ceiling at large N.
+#[allow(clippy::too_many_lines)] // three input distributions × 4 sizes × serial/parallel arms
 fn bench_parallel_dispatch_experiment(c: &mut Criterion) {
     let sizes: [usize; 4] = [100, 1_000, 10_000, 100_000];
 
@@ -568,6 +569,57 @@ fn bench_parallel_dispatch_experiment(c: &mut Criterion) {
         });
     }
     iv_group.finish();
+
+    // greeks::all arm — ~19ns/row (~15x cheaper than iv::solve, ~1.4x more
+    // expensive than bsm::price). Break-even at ~N=2600; the production
+    // gate (`GREEKS_PARALLEL_THRESHOLD = 4096` in `lib.rs`) is set above
+    // that with margin. Five outputs per row → parallel path collects
+    // tuples and unzips serially (matches the PyO3 macro implementation).
+    let mut greeks_group = c.benchmark_group("parallel/greeks_all");
+    for &n in &sizes {
+        let strikes: Vec<f64> = (0..n)
+            .map(|i| 80.0 + 40.0 * (i as f64) / (n as f64))
+            .collect();
+        greeks_group.throughput(Throughput::Elements(n as u64));
+        greeks_group.bench_function(BenchmarkId::new("serial", n), |b| {
+            b.iter(|| {
+                let out: Vec<(f64, f64, f64, f64, f64)> = (0..n)
+                    .map(|i| {
+                        greeks::all(
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                            black_box(0.20),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+        greeks_group.bench_function(BenchmarkId::new("rayon", n), |b| {
+            b.iter(|| {
+                let out: Vec<(f64, f64, f64, f64, f64)> = (0..n)
+                    .into_par_iter()
+                    .map(|i| {
+                        greeks::all(
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                            black_box(0.20),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+    }
+    greeks_group.finish();
 }
 
 fn bench_black76_price_scalar(c: &mut Criterion) {
