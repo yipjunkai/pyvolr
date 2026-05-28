@@ -65,8 +65,11 @@ jobs:
           set -e
           git fetch origin "$BASE_REF" --depth=1
           # Detached checkout: we don't care about preserving local refs and
-          # the post-step doesn't need to push.
-          git checkout --detach "origin/$BASE_REF"
+          # the post-step doesn't need to push. `-f` discards any working-tree
+          # changes left over from the previous `cargo bench` (cargo may
+          # rewrite `Cargo.lock` metadata when the PR head's lockfile drifts
+          # from base, and a plain checkout would refuse).
+          git checkout -f --detach "origin/$BASE_REF"
           if [ ! -f crates/core/benches/pricing.rs ]; then
             echo "::notice::No benches/pricing.rs on base ref; bootstrapping baselines this run."
             exit 0
@@ -77,10 +80,12 @@ jobs:
       # `.github/scripts/check_perf.py` may not exist there (it doesn't on a
       # bootstrap PR).  Return to the PR head so the comparator script is
       # present.  `target/criterion/` is untouched by git checkout, so both
-      # baselines remain available.
+      # baselines remain available.  `-f` discards any `Cargo.lock`
+      # metadata rewrite cargo did on the base-ref bench above; the
+      # disposable rewrite has no value past this point.
       - name: Restore PR head
         if: always() && github.event_name == 'pull_request'
-        run: git checkout --detach "$GITHUB_SHA"
+        run: git checkout -f --detach "$GITHUB_SHA"
 
       # 3) Compare.  Bootstrap PRs (no base baseline) print notices and exit 0.
       - name: Compare baselines
