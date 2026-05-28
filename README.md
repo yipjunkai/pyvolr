@@ -58,13 +58,13 @@ pyvolr leads at every input size up to ~1M strikes. **quantforge overtakes at ve
 
 ¹ py_vollib's `implied_volatility` is scalar-only; the 10k figure is `N × scalar`. pyvolr's vectorised path also parallelises automatically above N=1024 via rayon — set `RAYON_NUM_THREADS=1` to force serial.
 
-The table above is the headline-vs-the-abandoned-upstream comparison (py_vollib 1.0.0 is broken on Python 3.12+, see [docs/why.md](docs/why.md)). For the workload most people actually run — a smile, an option chain, an IV snapshot — pyvolr is faster than every actively-maintained alternative and installs cleanly on every modern Python.
+The table above is the headline-vs-the-abandoned-upstream comparison (py_vollib's last release is broken on Python 3.12+, see [docs/why.md](docs/why.md)). For the workload most people actually run — a smile, an option chain, an IV snapshot — pyvolr is faster than every actively-maintained alternative and installs cleanly on every modern Python.
 
 `bs.greeks` returning all five Greeks at once uses a single-pass Rust kernel that shares `d1`/`d2`, discount factors, `cdf`, and `pdf` across the five outputs — ~3× faster than the equivalent five separate calls. For batches ≥4096 rows, the work also dispatches across CPU cores in parallel.
 
 **Numerical agreement:** pyvolr matches every library above to f64 precision (~1e-13 relative) on every well-posed input across price + 5 Greeks + IV. At deep-OTM short-expiry corners pyvolr is *more* precise than the rest — `blackscholes` and `quantforge` underflow to zero where pyvolr's `erfcx`-based cdf retains the ~1e-50 price; QuantLib and the alternatives lose 1-2 digits. Run `python bench/sanity_check_competitors.py` in each venv to re-validate.
 
-Reproduce the table with `python bench/compare_py_vollib.py`; reproduce the chart with `python bench/compare_competitors.py bench` then `python bench/compare_competitors.py chart` (across the Python 3.11 + 3.12 venvs documented in the script's docstring). Library versions: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.2 / vollib 1.0.7 / py_vollib_vectorized 0.1.1 / blackscholes 0.2.0 / QuantLib 1.42.1 / quantforge 0.1.1.
+Reproduce the table with `python bench/compare_py_vollib.py`; reproduce the chart with `python bench/compare_competitors.py bench` then `python bench/compare_competitors.py chart` (across the Python 3.11 + 3.12 venvs documented in the script's docstring). Library versions: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.2 / py_vollib 1.0.1 (table) / vollib 1.0.7 / py_vollib_vectorized 0.1.1 / blackscholes 0.2.0 / QuantLib 1.42.1 / quantforge 0.1.1 (chart).
 
 ## 📦 Install
 
