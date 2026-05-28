@@ -73,6 +73,29 @@ PER_BENCH_THRESHOLDS: dict[str, float] = {
     # Price/Greek benches affected by the cdf erfcx-tail branch:
     "bsm_price_scalar": 0.30,
     "black76_price_scalar": 0.30,
+    #
+    # Audit (audit/mechanical-sympathy) bench harnesses that exist to
+    # document measurement-backed decisions, not to gate perf regressions:
+    #
+    # - `cdf_branch_experiment` (F2 rejected): branchless arm is 14-69%
+    #   slower by design; comparing branched vs branchless absolutely is
+    #   the point.
+    # - `bsm_price_flag_dispatch` (F5 rejected): three input distributions
+    #   that map to different inner-loop branch outcomes; expected to drift
+    #   together under noise but the relative ratio matters more.
+    # - `parallel/*` (F4 / F4b experiment harness): three sub-benches
+    #   (bsm_price, iv_solve, greeks_all) x {serial, rayon} x four N values.
+    #   The slow-serial-large-N arms intentionally take milliseconds; their
+    #   absolute runtime is the input to the threshold-tuning decision, not
+    #   a perf gate.
+    #
+    # 50% ceiling absorbs runner-side noise without false-positiving on
+    # the documented alternatives. Real perf regressions in production
+    # code paths show up on the dedicated gates (`bsm_greeks_all_vec`,
+    # `bsm_price_vec`, `iv_solve_vec`, etc.) which keep the default 10%.
+    "cdf_branch_experiment": 0.50,
+    "bsm_price_flag_dispatch": 0.50,
+    "parallel": 0.50,
 }
 
 
