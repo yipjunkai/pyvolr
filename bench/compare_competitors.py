@@ -313,6 +313,12 @@ def _render(
         key=lambda n: (not n.startswith("pyvolr"), competitor_sort_sign * -at_100k(n)),
     )
 
+    # Visual emphasis on pyvolr: solid line, white-edged markers, full opacity,
+    # thicker stroke. Competitors are de-emphasised: dashed lines, smaller
+    # markers, lower opacity. The contrast makes pyvolr legible at a glance
+    # even with 6 lines on a log-log chart.
+    import matplotlib.patheffects as path_effects
+
     for name in names:
         timings = results[name]
         ns = sorted(int(k) for k in timings)
@@ -321,17 +327,45 @@ def _render(
         else:
             ys = [n / timings[str(n)] for n in ns]
         is_pyvolr = name.startswith("pyvolr")
-        ax.loglog(
-            ns,
-            ys,
-            ("o-" if is_pyvolr else "s-"),
-            color=_color_for(name, theme=theme),
-            linewidth=2.6 if is_pyvolr else 2.0,
-            markersize=9 if is_pyvolr else 7,
-            label=name,
-            alpha=1.0 if is_pyvolr else 0.85,
-            zorder=5 if is_pyvolr else 3,
-        )
+        color = _color_for(name, theme=theme)
+        if is_pyvolr:
+            (line,) = ax.loglog(
+                ns,
+                ys,
+                "o-",
+                color=color,
+                linewidth=3.2,
+                markersize=11,
+                markeredgewidth=1.5,
+                markeredgecolor=("#ffffff" if theme == "light" else "#1f2937"),
+                label=name,
+                alpha=1.0,
+                zorder=10,
+            )
+            # Subtle outline so the pyvolr line stays distinct against any
+            # competitor that happens to cross it on the log-log plot.
+            line.set_path_effects(
+                [
+                    path_effects.Stroke(
+                        linewidth=4.6,
+                        foreground=("#ffffff" if theme == "light" else "#111827"),
+                        alpha=0.9,
+                    ),
+                    path_effects.Normal(),
+                ]
+            )
+        else:
+            ax.loglog(
+                ns,
+                ys,
+                "s--",
+                color=color,
+                linewidth=1.6,
+                markersize=6,
+                label=name,
+                alpha=0.65,
+                zorder=3,
+            )
 
     ax.set_xlabel(
         "Array size (number of options priced per call)",

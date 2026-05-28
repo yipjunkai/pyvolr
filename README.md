@@ -17,37 +17,6 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
 
 ## ⚡ Performance
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-dark.svg">
-  <img alt="BSM call pricing throughput: pyvolr vs py_vollib, log-log scaling by array size" src="https://raw.githubusercontent.com/yipjunkai/pyvolr/main/docs/assets/perf-light.svg">
-</picture>
-
-| Scenario                       |   pyvolr |  py_vollib |  speedup |
-| ------------------------------ | -------: | ---------: | -------: |
-| `bs.price`, scalar             |   4.2 µs |     2.2 µs |     0.5× |
-| `bs.price`, 1k strikes         |  24.6 µs |    2.32 ms |      94× |
-| `bs.price`, 10k strikes        |   153 µs |   23.32 ms |     152× |
-| `bs.price`, 100k strikes       |  1.39 ms |  234.91 ms |     169× |
-| `bs.price`, 1M strikes         | 14.54 ms |   2,350 ms |     162× |
-| `bs.greeks` (all 5), 10k       |   273 µs |   89.95 ms |     330× |
-| `bs.implied_vol`, scalar       |   4.4 µs |    15.0 µs |     3.4× |
-| `bs.implied_vol`, 10k strikes  |   465 µs | ≈ 150 ms ¹ |   ≈ 323× |
-| `black76.price`, scalar        |   3.7 µs |     2.2 µs |     0.6× |
-| `black76.price`, 10k strikes   |   141 µs |   23.19 ms |     164× |
-| `black76.implied_vol`, scalar  |   3.9 µs |    14.7 µs |     3.8× |
-
-¹ py_vollib's `implied_volatility` is scalar-only; the 10k figure is `N × scalar`. pyvolr's vectorised path also parallelises automatically above N=1024 via rayon — set `RAYON_NUM_THREADS=1` to force serial.
-
-Vectorize anything you can — that's where pyvolr wins. For a single scalar `price` call, py_vollib's pure-Python path edges out pyvolr because the PyO3 FFI roundtrip + numpy broadcasting setup costs a few microseconds; even a 2-element array call already favors pyvolr. Black-76's profile tracks BSM's exactly because the Rust core delegates to `bsm::price` with `q=r` rather than duplicating math.
-
-`bs.greeks` returning all five Greeks at once uses a single-pass Rust kernel that shares `d1`/`d2`, discount factors, `cdf`, and `pdf` across the five outputs — ~3× faster than the equivalent five separate calls. For batches ≥4096 rows, the work also dispatches across CPU cores in parallel.
-
-Reproduce with `python bench/compare_py_vollib.py`. Numbers above: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.2 vs py_vollib 1.0.1.
-
-### 🌐 ...or against the live ecosystem
-
-py_vollib is the historical comparison; here's where pyvolr sits against the actively-maintained BSM-pricing libraries:
-
 <table>
 <tr>
 <td>
@@ -69,15 +38,33 @@ py_vollib is the historical comparison; here's where pyvolr sits against the act
 </tr>
 </table>
 
-Six libraries on the chart: `pyvolr`, [`vollib`](https://pypi.org/project/vollib/) (resurrected upstream, pure Python), [`py_vollib_vectorized`](https://pypi.org/project/py_vollib_vectorized/) (numba), [`blackscholes`](https://pypi.org/project/blackscholes/) (pure Python, object-per-call), [`QuantLib`](https://pypi.org/project/QuantLib/) (C++ core, looped scalar), and [`quantforge`](https://pypi.org/project/quantforge/) (Rust + SIMD).
+Six libraries on the chart: **`pyvolr`**, [`vollib`](https://pypi.org/project/vollib/) (resurrected upstream of `py_vollib`, pure Python), [`py_vollib_vectorized`](https://pypi.org/project/py_vollib_vectorized/) (numba), [`blackscholes`](https://pypi.org/project/blackscholes/) (pure Python, object-per-call), [`QuantLib`](https://pypi.org/project/QuantLib/) (C++ core, looped scalar), and [`quantforge`](https://pypi.org/project/quantforge/) (Rust + SIMD).
 
 pyvolr leads at every input size up to ~1M strikes. **quantforge overtakes at very large batches** via explicit SIMD vectorisation — the same axis [fast-vollib](https://arxiv.org/abs/2604.27210) takes with Triton kernels. pyvolr's positioning is explicitly the "Rust-cored CPU option" — no `unsafe` SIMD intrinsics, no GPU dependency, abi3 wheel ships in one file. If you're pricing 10M+ strikes per call and CPU-only, prefer quantforge.
 
-For the workload most people actually run — a smile, an option chain, an IV snapshot — pyvolr is faster than every other actively-maintained alternative and installs cleanly on every modern Python.
+| Scenario                       |   pyvolr |  py_vollib |  speedup |
+| ------------------------------ | -------: | ---------: | -------: |
+| `bs.price`, scalar             |   4.2 µs |     2.2 µs |     0.5× |
+| `bs.price`, 1k strikes         |  24.6 µs |    2.32 ms |      94× |
+| `bs.price`, 10k strikes        |   153 µs |   23.32 ms |     152× |
+| `bs.price`, 100k strikes       |  1.39 ms |  234.91 ms |     169× |
+| `bs.price`, 1M strikes         | 14.54 ms |   2,350 ms |     162× |
+| `bs.greeks` (all 5), 10k       |   273 µs |   89.95 ms |     330× |
+| `bs.implied_vol`, scalar       |   4.4 µs |    15.0 µs |     3.4× |
+| `bs.implied_vol`, 10k strikes  |   465 µs | ≈ 150 ms ¹ |   ≈ 323× |
+| `black76.price`, scalar        |   3.7 µs |     2.2 µs |     0.6× |
+| `black76.price`, 10k strikes   |   141 µs |   23.19 ms |     164× |
+| `black76.implied_vol`, scalar  |   3.9 µs |    14.7 µs |     3.8× |
+
+¹ py_vollib's `implied_volatility` is scalar-only; the 10k figure is `N × scalar`. pyvolr's vectorised path also parallelises automatically above N=1024 via rayon — set `RAYON_NUM_THREADS=1` to force serial.
+
+The table above is the headline-vs-the-abandoned-upstream comparison (py_vollib 1.0.0 is broken on Python 3.12+, see [docs/why.md](docs/why.md)). For the workload most people actually run — a smile, an option chain, an IV snapshot — pyvolr is faster than every actively-maintained alternative and installs cleanly on every modern Python.
+
+`bs.greeks` returning all five Greeks at once uses a single-pass Rust kernel that shares `d1`/`d2`, discount factors, `cdf`, and `pdf` across the five outputs — ~3× faster than the equivalent five separate calls. For batches ≥4096 rows, the work also dispatches across CPU cores in parallel.
 
 **Numerical agreement:** pyvolr matches every library above to f64 precision (~1e-13 relative) on every well-posed input across price + 5 Greeks + IV. At deep-OTM short-expiry corners pyvolr is *more* precise than the rest — `blackscholes` and `quantforge` underflow to zero where pyvolr's `erfcx`-based cdf retains the ~1e-50 price; QuantLib and the alternatives lose 1-2 digits. Run `python bench/sanity_check_competitors.py` in each venv to re-validate.
 
-Reproduce the perf chart with `python bench/compare_competitors.py bench` (across the Python 3.11 + 3.12 venvs documented in the script's docstring) then `python bench/compare_competitors.py chart`. Library versions: pyvolr 0.1.2 / vollib 1.0.7 / py_vollib_vectorized 0.1.1 / blackscholes 0.2.0 / QuantLib 1.42.1 / quantforge 0.1.1.
+Reproduce the table with `python bench/compare_py_vollib.py`; reproduce the chart with `python bench/compare_competitors.py bench` then `python bench/compare_competitors.py chart` (across the Python 3.11 + 3.12 venvs documented in the script's docstring). Library versions: Apple M4 Pro / Python 3.10.20 / numpy 2.2.6 / pyvolr 0.1.2 / vollib 1.0.7 / py_vollib_vectorized 0.1.1 / blackscholes 0.2.0 / QuantLib 1.42.1 / quantforge 0.1.1.
 
 ## 📦 Install
 
