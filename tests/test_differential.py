@@ -70,6 +70,12 @@ from py_vollib.black_scholes.implied_volatility import (
 )
 from py_vollib.black_scholes_merton import black_scholes_merton as _pvol_bsm
 
+# Modern pyvolr API — uses per-unit-vol vega, per-year theta, per-unit-r rho.
+# The compat shim divides these by 100 / 365 / 100 to match py_vollib's
+# conventions; the modern-API guard tests below assert the reverse identity
+# without going through the shim.
+from pyvolr import black76 as _pv_b76_modern
+from pyvolr import bs as _pv_bs_modern
 from pyvolr.compat.py_vollib.black import (
     black as _pv_black,
 )
@@ -340,3 +346,99 @@ def test_black76_iv_matches_py_vollib(
     pv_iv = _pv_black_iv(ref_price, f, k, r, t, flag)
     ref_iv = _pvol_black_iv(ref_price, f, k, r, t, flag)
     assert pv_iv == pytest.approx(ref_iv, abs=IV_TOL)
+
+
+# ---------------------------------------------------------------------------
+# Modern-API convention guards.
+#
+# The tests above gate the `pyvolr.compat.py_vollib.*` shim against py_vollib.
+# The shim has its own conversion layer (per-1%-vol vega -> per-unit, per-day
+# theta -> per-year, per-1%-rate rho -> per-unit), so if `pyvolr.bs.vega` ever
+# silently switched to per-1%-vol the shim's `/100` would compensate and the
+# compat tests above would still pass — while every user of the modern API
+# would silently see 100x-wrong vega.
+#
+# These tests assert the reverse identity directly: modern API == py_vollib *
+# documented conversion factor. Delta/gamma share the same convention across
+# both APIs (no factor), so they're already covered by the shim tests above.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("s", "k", "t", "r", "sigma", "flag"),
+    _params(SPOTS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_modern_bs_vega_is_per_unit_vol(
+    s: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    # pyvolr.bs.vega is per-unit-vol; py_vollib is per-1%-vol. Ratio: 100x.
+    del flag  # bs.vega is flag-independent (vega is identical for call/put)
+    modern = float(_pv_bs_modern.vega(S=s, K=k, T=t, r=r, sigma=sigma))
+    ref = _pvol_vega("c", s, k, t, r, sigma) * 100.0
+    # Tolerance scales with the conversion factor so the implied relative
+    # precision matches the shim tests above (GREEK_TOL is f64-roundoff at
+    # the per-1%-vol scale; per-unit-vol values are 100x larger).
+    assert modern == pytest.approx(ref, abs=GREEK_TOL * 100.0)
+
+
+@pytest.mark.parametrize(
+    ("s", "k", "t", "r", "sigma", "flag"),
+    _params(SPOTS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_modern_bs_theta_is_per_year(
+    s: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    # pyvolr.bs.theta is per-year; py_vollib is per-day. Ratio: 365x.
+    modern = float(_pv_bs_modern.theta(flag, S=s, K=k, T=t, r=r, sigma=sigma))
+    ref = _pvol_theta(flag, s, k, t, r, sigma) * 365.0
+    assert modern == pytest.approx(ref, abs=GREEK_TOL * 365.0)
+
+
+@pytest.mark.parametrize(
+    ("s", "k", "t", "r", "sigma", "flag"),
+    _params(SPOTS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_modern_bs_rho_is_per_unit_rate(
+    s: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    # pyvolr.bs.rho is per-unit-rate; py_vollib is per-1%-rate. Ratio: 100x.
+    modern = float(_pv_bs_modern.rho(flag, S=s, K=k, T=t, r=r, sigma=sigma))
+    ref = _pvol_rho(flag, s, k, t, r, sigma) * 100.0
+    assert modern == pytest.approx(ref, abs=GREEK_TOL * 100.0)
+
+
+@pytest.mark.parametrize(
+    ("f", "k", "t", "r", "sigma", "flag"),
+    _params(FORWARDS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_modern_black76_vega_is_per_unit_vol(
+    f: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    del flag
+    modern = float(_pv_b76_modern.vega(F=f, K=k, T=t, r=r, sigma=sigma))
+    ref = _pvol_black_vega("c", f, k, t, r, sigma) * 100.0
+    assert modern == pytest.approx(ref, abs=GREEK_TOL * 100.0)
+
+
+@pytest.mark.parametrize(
+    ("f", "k", "t", "r", "sigma", "flag"),
+    _params(FORWARDS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_modern_black76_theta_is_per_year(
+    f: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    modern = float(_pv_b76_modern.theta(flag, F=f, K=k, T=t, r=r, sigma=sigma))
+    ref = _pvol_black_theta(flag, f, k, t, r, sigma) * 365.0
+    assert modern == pytest.approx(ref, abs=GREEK_TOL * 365.0)
+
+
+@pytest.mark.parametrize(
+    ("f", "k", "t", "r", "sigma", "flag"),
+    _params(FORWARDS, STRIKES, TIMES, RATES, SIGMAS, FLAGS),
+)
+def test_modern_black76_rho_is_per_unit_rate(
+    f: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    modern = float(_pv_b76_modern.rho(flag, F=f, K=k, T=t, r=r, sigma=sigma))
+    ref = _pvol_black_rho(flag, f, k, t, r, sigma) * 100.0
+    assert modern == pytest.approx(ref, abs=GREEK_TOL * 100.0)
