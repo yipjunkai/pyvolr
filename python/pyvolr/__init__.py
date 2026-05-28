@@ -6,7 +6,7 @@ Quick start:
 
     >>> from pyvolr import bs
     >>> bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2)
-    3.2240...
+    4.581680167540007
 
 For a drop-in py_vollib replacement, use the compatibility shim:
 
