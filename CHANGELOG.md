@@ -4,6 +4,13 @@ All notable changes to pyvolr are documented in this file. This file is
 maintained by [release-please](https://github.com/googleapis/release-please)
 from conventional commits — do not edit version sections by hand.
 
+## [0.1.3](https://github.com/yipjunkai/pyvolr/compare/v0.1.2...v0.1.3) (2026-05-29)
+
+
+### Performance
+
+* mechanical-sympathy audit + 2026 competitor positioning ([#11](https://github.com/yipjunkai/pyvolr/issues/11)) ([002c763](https://github.com/yipjunkai/pyvolr/commit/002c76331b983df9be12523d8198c848fc72dbe3))
+
 ## [0.1.2](https://github.com/yipjunkai/pyvolr/compare/v0.1.1...v0.1.2) (2026-05-26)
 
 
