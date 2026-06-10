@@ -33,8 +33,29 @@ updates:
       prefix: "chore"
       include: scope
 
-  # Python deps (pip / pyproject).
-  - package-ecosystem: pip
+  # Fuzz deps (Cargo). fuzz/ is a standalone workspace excluded from the root
+  # one, so it has its own Cargo.lock that the `/` entry above does not see.
+  # Its lock is committed and now enforced in CI (fuzz.yml runs
+  # `cargo fetch --locked`), so it needs its own mover or the pins freeze.
+  - package-ecosystem: cargo
+    directory: /fuzz
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      fuzz-minor:
+        update-types: [minor, patch]
+      fuzz-major:
+        update-types: [major]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: scope
+
+  # Python deps (uv.lock + pyproject). CI installs exclusively from the
+  # lockfile (`uv sync --locked` / `uv export --locked`), so this entry is
+  # the only mover of Python dep versions — without it, pinning = freezing.
+  - package-ecosystem: uv
     directory: /
     schedule:
       interval: weekly
