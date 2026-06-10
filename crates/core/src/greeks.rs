@@ -14,9 +14,19 @@ use crate::normal::{cdf, pdf};
 /// First derivative of price with respect to spot. Range: `(-exp(-qT), exp(-qT))`.
 pub fn delta(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
     if t <= 0.0 || sigma <= 0.0 {
+        // ITM is decided by the moneyness the limiting price actually uses:
+        //   - t <= 0 (expiry): price = max(0, ±(S − K)), a step on SPOT vs K.
+        //   - sigma <= 0, t > 0: price = e^(−rT)·intrinsic(F, K) with the
+        //     forward F = S·e^((r−q)T) (see `bsm::price`), so the step is on
+        //     FORWARD moneyness and the slope is d/dS[e^(−rT)(F − K)] = e^(−qT).
+        //     Deciding on spot here is wrong: for S in (K·e^(−(r−q)T), K) the
+        //     option is forward-ITM yet spot-OTM, and delta must be ±e^(−qT),
+        //     not 0 — finite-differencing this library's own zero-vol price
+        //     exposes the inconsistency.
+        let moneyness = if t > 0.0 { s * ((r - q) * t).exp() } else { s };
         let in_the_money = match flag {
-            Flag::Call => s > k,
-            Flag::Put => s < k,
+            Flag::Call => moneyness > k,
+            Flag::Put => moneyness < k,
         };
         let disc_q = (-q * t.max(0.0)).exp();
         return if in_the_money {
@@ -115,11 +125,14 @@ pub fn all(
     let disc_q = (-q * t).exp();
     let disc_r = (-r * t).exp();
     let pd1 = pdf(d1);
-    let nd1 = cdf(d1);
-    let nd2 = cdf(d2);
 
     let (delta_v, theta_v, rho_v) = match flag {
         Flag::Call => {
+            // `cdf(d1)`/`cdf(d2)` only feed the call arm; the put arm uses the
+            // `cdf(-d1)`/`cdf(-d2)` tail forms, so keep each inside its arm
+            // rather than computing both pairs unconditionally.
+            let nd1 = cdf(d1);
+            let nd2 = cdf(d2);
             let common = -s * disc_q * pd1 * sigma / (2.0 * sqrt_t);
             (
                 disc_q * nd1,
@@ -170,22 +183,11 @@ mod tests {
     fn gamma_matches_fd() {
         let (s, k, t, r, q, sigma) = (100.0, 105.0, 0.5, 0.05, 0.02, 0.25);
         let analytical = gamma(s, k, t, r, q, sigma);
-        let fd = finite_diff(
-            |x| {
-                (price(Flag::Call, x + 0.01, k, t, r, q, sigma)
-                    - 2.0 * price(Flag::Call, x, k, t, r, q, sigma)
-                    + price(Flag::Call, x - 0.01, k, t, r, q, sigma))
-                    / (0.01 * 0.01)
-            },
-            s,
-            0.0,
-        );
-        // Use the inner expression rather than passing fd's wrapper.
+        // gamma = ∂²price/∂S²: second central difference of price wrt spot.
         let direct = (price(Flag::Call, s + 0.01, k, t, r, q, sigma)
             - 2.0 * price(Flag::Call, s, k, t, r, q, sigma)
             + price(Flag::Call, s - 0.01, k, t, r, q, sigma))
             / (0.01 * 0.01);
-        let _ = fd;
         assert_relative_eq!(analytical, direct, epsilon = 1e-3);
     }
 
@@ -276,6 +278,38 @@ mod tests {
         let disc_q = (-q * t).exp();
         // call_delta + |put_delta| = exp(-qT) (since put_delta is negative).
         assert_relative_eq!(cd - pd, disc_q, max_relative = 1e-15);
+    }
+
+    /// σ=0 delta must read FORWARD moneyness and equal the slope of this
+    /// library's own zero-vol price — not spot moneyness (the old bug).
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn delta_zero_vol_uses_forward_moneyness() {
+        let h = 1e-3;
+        // Spot-OTM but forward-ITM call: S=97 < K=100, F = 97·e^(0.05) ≈ 101.97
+        // > 100. Old spot test (97 > 100) returned 0; true delta is e^(−qT) = 1.
+        let (s, k, t, r, q) = (97.0, 100.0, 1.0, 0.05, 0.0);
+        let dc = delta(Flag::Call, s, k, t, r, q, 0.0);
+        assert_relative_eq!(dc, (-q * t).exp(), epsilon = 1e-15);
+        let fd_c = (price(Flag::Call, s + h, k, t, r, q, 0.0)
+            - price(Flag::Call, s - h, k, t, r, q, 0.0))
+            / (2.0 * h);
+        assert_relative_eq!(dc, fd_c, epsilon = 1e-9);
+        // The put at the same point is forward-OTM ⇒ delta 0.
+        assert_eq!(delta(Flag::Put, s, k, t, r, q, 0.0), 0.0);
+
+        // Dividend case where the forward sits BELOW spot: S=K=100, r=4%, q=8%
+        // ⇒ F = 100·e^(−0.04) ≈ 96.08 < K. The put is forward-ITM and must read
+        // −e^(−qT); the call is forward-OTM ⇒ 0.
+        let (s2, k2, t2, r2, q2): (f64, f64, f64, f64, f64) = (100.0, 100.0, 1.0, 0.04, 0.08);
+        assert!(s2 * ((r2 - q2) * t2).exp() < k2);
+        let dp = delta(Flag::Put, s2, k2, t2, r2, q2, 0.0);
+        assert_relative_eq!(dp, -(-q2 * t2).exp(), epsilon = 1e-15);
+        let fd_p = (price(Flag::Put, s2 + h, k2, t2, r2, q2, 0.0)
+            - price(Flag::Put, s2 - h, k2, t2, r2, q2, 0.0))
+            / (2.0 * h);
+        assert_relative_eq!(dp, fd_p, epsilon = 1e-9);
+        assert_eq!(delta(Flag::Call, s2, k2, t2, r2, q2, 0.0), 0.0);
     }
 
     #[test]
