@@ -80,42 +80,35 @@ pub fn all(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> (f64, f64,
     let sqrt_t = t.sqrt();
     let disc = (-r * t).exp();
     let pd1 = pdf(d1);
-    let nd1 = cdf(d1);
-    let nd2 = cdf(d2);
 
-    let (delta_v, theta_v, price_v) = match flag {
+    let (delta_v, theta_v) = match flag {
         Flag::Call => {
+            let nd1 = cdf(d1);
+            let nd2 = cdf(d2);
             let common = -f * disc * pd1 * sigma / (2.0 * sqrt_t);
-            (
-                disc * nd1,
-                common - r * k * disc * nd2 + r * f * disc * nd1,
-                // Mirror `bsm::price`'s arithmetic ordering exactly
-                // (`f * disc * nd1 - k * disc * nd2`, NOT `disc * (f*nd1 -
-                // k*nd2)`). At deep OTM the two associations produce
-                // different f64 values due to cancellation; matching
-                // `bsm::price` keeps `rho_v` bit-equal to the standalone
-                // `rho()` path (which routes through `bsm_price`).
-                f * disc * nd1 - k * disc * nd2,
-            )
+            (disc * nd1, common - r * k * disc * nd2 + r * f * disc * nd1)
         }
         Flag::Put => {
-            // Same f64-precision argument as `greeks::all`: route put delta
-            // through `cdf(-d1)` so the `erfcx` tail handles deep-OTM puts
-            // without the `cdf(d1) - 1.0` catastrophic cancellation.
+            // Route put delta/theta through `cdf(-d1)` / `cdf(-d2)` so the
+            // `erfcx` tail handles deep-OTM puts without the `cdf(d1) - 1.0`
+            // catastrophic cancellation (same argument as `greeks::all`).
             let neg_nd1 = cdf(-d1);
             let neg_nd2 = cdf(-d2);
             let common = -f * disc * pd1 * sigma / (2.0 * sqrt_t);
             (
                 -disc * neg_nd1,
                 common + r * k * disc * neg_nd2 - r * f * disc * neg_nd1,
-                // Same association-matching argument as the call arm.
-                k * disc * neg_nd2 - f * disc * neg_nd1,
             )
         }
     };
     let gamma_v = disc * pd1 / (f * sigma * sqrt_t);
     let vega_v = f * disc * pd1 * sqrt_t;
-    let rho_v = -t * price_v;
+    // Black-76 rho is defined off the price (rho = −T·price), not the d1/d2
+    // form. Route through `bsm_price` — now the normalised-Black engine — so
+    // `rho_v` stays bit-equal to the standalone `rho()` path, which is also
+    // `−t · bsm_price(...)`. (This supersedes the old inline `f·disc·N(d1) −
+    // k·disc·N(d2)`, which mirrored the textbook pricer's arithmetic ordering.)
+    let rho_v = -t * bsm_price(flag, f, k, t, r, r, sigma);
     (delta_v, gamma_v, vega_v, theta_v, rho_v)
 }
 

@@ -244,6 +244,18 @@ mod normalised_black {
     }
 }
 
+/// Normalised Black call `b(x, s)` with `x = ln(F/K)`, `s = σ·√T`, exposed for
+/// `bsm::price`. The undiscounted BSM call is `√(F·K)·b(x, s)`; backing the
+/// public pricer with this ~1-ULP engine (the same one the IV solver uses)
+/// replaces the cancellation-prone `S·Φ(d1) − K·Φ(d2)` textbook form, which
+/// keeps only ~9 digits in the deep-OTM short-expiry corner. Puts use the
+/// reflection `b_put(x, s) = b_call(−x, s)`.
+pub(crate) fn normalised_black_call(x: f64, s: f64) -> f64 {
+    // `call_and_vega` is the production path (the test-only `call` wrapper takes
+    // its `.0`); the vega is discarded here — pricing needs only `b`.
+    normalised_black::call_and_vega(x, s).0
+}
+
 mod lbr {
     //! The Jäckel "Let's Be Rational" core: rational-cubic initial guess
     //! segmented in four log-moneyness branches, Householder order-4 iteration.
@@ -786,8 +798,11 @@ mod lbr {
 ///   - `t <= 0`,
 ///   - `s <= 0` or `k <= 0`,
 ///   - the target price is not finite or is negative,
-///   - the target price violates the no-arbitrage bounds,
-///   - LBR exceeds its iteration budget at the no-arbitrage boundary.
+///   - the target price violates the no-arbitrage bounds, or
+///   - the normalised solve returns a non-finite value (a defensive guard:
+///     the `PRICE_ABOVE_MAX` sentinel maps here). The Householder iteration is
+///     hard-capped at `MAX_ITER` but always returns a finite `s` — it does not
+///     signal non-convergence, since ≤ 2 steps suffice across all interior β.
 pub fn solve(target_price: f64, flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64) -> f64 {
     if t <= 0.0 || s <= 0.0 || k <= 0.0 || !target_price.is_finite() || target_price < 0.0 {
         return f64::NAN;
