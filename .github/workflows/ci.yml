@@ -41,20 +41,20 @@ jobs:
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: "3.12"
-      - name: Install Python lint tools (incl. project + test deps so pyright resolves all imports)
-        run: |
-          uv venv
-          uv pip install 'ruff>=0.15' 'pyright>=1.1.400' pytest hypothesis numpy
+      - name: Install lint + test deps from uv.lock (project deps too, so pyright resolves all imports)
+        # --locked also asserts the lockfile is in sync with pyproject.toml,
+        # so a stale uv.lock fails the PR here rather than drifting silently.
+        run: uv sync --locked --extra dev --extra test --no-install-project
       - name: cargo fmt
         run: cargo fmt --all --check
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: ruff check
-        run: uv run ruff check .
+        run: uv run --no-sync ruff check .
       - name: ruff format
-        run: uv run ruff format --check .
+        run: uv run --no-sync ruff format --check .
       - name: pyright
-        run: uv run pyright
+        run: uv run --no-sync pyright
       - name: actionlint
         run: |
           curl -sL -o actionlint.tar.gz \
@@ -106,13 +106,14 @@ jobs:
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: ${{ matrix.python }}
-      - name: Build extension and install with test deps
+      - name: Install locked deps and build the extension
+        # maturin comes from the dev extra; --no-sync below stops uv run from
+        # re-resolving (and re-building the project) on every invocation.
         run: |
-          uv venv
-          uv pip install maturin pytest pytest-benchmark hypothesis numpy
-          uv run maturin develop --release
+          uv sync --locked --extra test --extra dev --no-install-project
+          uv run --no-sync maturin develop --release
       - name: Run pytest
-        run: uv run pytest -ra
+        run: uv run --no-sync pytest -ra
 
   property-tests:
     name: property tests (extended)
@@ -124,13 +125,12 @@ jobs:
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: "3.12"
-      - name: Build and install
+      - name: Install locked deps and build the extension
         run: |
-          uv venv
-          uv pip install maturin pytest hypothesis numpy
-          uv run maturin develop --release
+          uv sync --locked --extra test --extra dev --no-install-project
+          uv run --no-sync maturin develop --release
       - name: Hypothesis thorough profile
-        run: uv run pytest -m property --hypothesis-profile=thorough
+        run: uv run --no-sync pytest -m property --hypothesis-profile=thorough
 
   msrv:
     name: msrv

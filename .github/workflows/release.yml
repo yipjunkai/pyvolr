@@ -30,9 +30,8 @@ jobs:
           python-version: "3.12"
       - name: Build sdist
         run: |
-          uv venv
-          uv pip install maturin
-          uv run maturin sdist --out dist
+          uv sync --locked --extra dev --no-install-project
+          uv run --no-sync maturin sdist --out dist
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sdist
@@ -65,6 +64,13 @@ jobs:
       - name: Add x86_64-apple-darwin Rust target (macOS only)
         if: matrix.platform.runner == 'macos-14'
         run: rustup target add x86_64-apple-darwin
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - name: Export locked test deps for in-wheel verification
+        # The export carries environment markers (numpy is forked 2.2.x/2.4.x
+        # across Python versions) and hashes, so the same file pins every
+        # selector in the matrix and pip runs in hash-checking mode.
+        shell: bash
+        run: uv export --locked --extra test --no-emit-project --output-file requirements-wheel-test.txt
       - name: Build wheels with cibuildwheel
         uses: pypa/cibuildwheel@8d2b08b68458a16aeb24b64e68a09ab1c8e82084 # v3.4.1
         env:
@@ -103,7 +109,10 @@ jobs:
           # Build envs in cibuildwheel v3 no longer pre-install setuptools/wheel; we still need
           # maturin explicitly as the build backend.
           CIBW_BEFORE_BUILD: "pip install maturin"
-          CIBW_TEST_REQUIRES: "pytest hypothesis numpy"
+          # Test deps come from uv.lock (exported above) instead of floating
+          # `pip install pytest ...`, so wheel verification at tag time cannot
+          # be broken — or subverted — by an upstream release that day.
+          CIBW_BEFORE_TEST: "pip install -r {project}/requirements-wheel-test.txt"
           CIBW_TEST_COMMAND: "pytest {project}/tests -ra"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
