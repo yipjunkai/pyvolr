@@ -41,10 +41,16 @@ jobs:
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: "3.12"
-      - name: Install lint + test deps from uv.lock (project deps too, so pyright resolves all imports)
+      - name: Install lint + test deps from uv.lock (incl. the project, so pyright resolves pyvolr)
         # --locked also asserts the lockfile is in sync with pyproject.toml,
         # so a stale uv.lock fails the PR here rather than drifting silently.
-        run: uv sync --locked --extra dev --extra test --no-install-project
+        #
+        # Unlike the test jobs (which `maturin develop` the extension), lint has
+        # no build step of its own. Omit --no-install-project so uv builds and
+        # installs pyvolr here — pyright needs `import pyvolr` to resolve. This
+        # restores the old `uv run pyright` behaviour (which synced the project
+        # implicitly) while pinning it to the lockfile.
+        run: uv sync --locked --extra dev --extra test
       - name: cargo fmt
         run: cargo fmt --all --check
       - name: cargo clippy
