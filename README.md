@@ -45,20 +45,22 @@ pyvolr leads at every input size up to ~1M strikes. **quantforge overtakes at ve
 | Scenario                       |   pyvolr |  py_vollib |  speedup |
 | ------------------------------ | -------: | ---------: | -------: |
 | `bs.price`, scalar             |   4.2 µs |     2.2 µs |     0.5× |
-| `bs.price`, 1k strikes         |  24.6 µs |    2.32 ms |      94× |
-| `bs.price`, 10k strikes        |   153 µs |   23.32 ms |     152× |
-| `bs.price`, 100k strikes       |  1.39 ms |  234.91 ms |     169× |
-| `bs.price`, 1M strikes         | 14.54 ms |   2,350 ms |     162× |
+| `bs.price`, 1k strikes         |  43.3 µs |    2.32 ms |      54× |
+| `bs.price`, 10k strikes        |   350 µs |   23.32 ms |      67× |
+| `bs.price`, 100k strikes       |  3.48 ms |  234.91 ms |      68× |
+| `bs.price`, 1M strikes         | 34.10 ms |   2,350 ms |      69× |
 | `bs.greeks` (all 5), 10k       |   273 µs |   89.95 ms |     330× |
 | `bs.implied_vol`, scalar       |   4.4 µs |    15.0 µs |     3.4× |
 | `bs.implied_vol`, 10k strikes  |   465 µs |   128 ms ¹ |     275× |
 | `black76.price`, scalar        |   3.7 µs |     2.2 µs |     0.6× |
-| `black76.price`, 10k strikes   |   141 µs |   23.19 ms |     164× |
+| `black76.price`, 10k strikes   |   346 µs |   23.19 ms |      67× |
 | `black76.implied_vol`, scalar  |   3.9 µs |    14.7 µs |     3.8× |
 
 ¹ py_vollib's `implied_volatility` is scalar-only; the 10k figure is `N` × scalar measured via `compare_py_vollib.py`. pyvolr's vectorised path parallelises automatically above N=1024 via rayon — set `RAYON_NUM_THREADS=1` to force serial.
 
-The table above is the headline-vs-the-abandoned-upstream comparison (py_vollib's last release is broken on Python 3.12+, see [docs/why.md](docs/why.md)). For the workload most people actually run — a smile, an option chain, an IV snapshot — pyvolr is faster than every actively-maintained alternative and installs cleanly on every modern Python.
+> **Pricing throughput note:** the `bs.price` / `black76.price` rows reflect the engine-backed pricer (normalised-Black; ~1-ULP accurate into the deep-OTM tail), which is ~2.3× slower on vectorised pricing than the prior textbook `S·Φ(d1) − K·Φ(d2)` form — a deliberate accuracy-for-speed trade. Greeks and IV are unchanged. **The competitor chart above predates this change; its pyvolr line is being re-measured.**
+
+The table above is the headline-vs-the-abandoned-upstream comparison (py_vollib's last release is broken on Python 3.12+, see [docs/why.md](docs/why.md)). For the workload most people actually run — a smile, an option chain, an IV snapshot — pyvolr is tens of times faster than the abandoned `py_vollib` upstream and installs cleanly on every modern Python.
 
 `bs.greeks` returning all five Greeks at once uses a single-pass Rust kernel that shares `d1`/`d2`, discount factors, `cdf`, and `pdf` across the five outputs — ~3× faster than the equivalent five separate calls. For batches ≥4096 rows, the work also dispatches across CPU cores in parallel.
 
