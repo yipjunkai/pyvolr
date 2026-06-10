@@ -306,6 +306,9 @@ wheelhouse/
 # pytest-benchmark output (written by bench.yml workflow)
 bench.json
 
+# Locked wheel-test requirements (generated in release.yml from uv.lock)
+requirements-wheel-test.txt
+
 # Local bench output cache (written by bench/compare_*.py)
 bench/.*_results.json
 

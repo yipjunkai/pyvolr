@@ -41,7 +41,56 @@ jobs:
           app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           token: ${{ steps.app-token.outputs.token }}
+
+      # release-please's `rust` strategy bumps crates/core/Cargo.toml but, in a
+      # Cargo *workspace*, it never patches the single root Cargo.lock (it looks
+      # for a per-package crates/core/Cargo.lock that doesn't exist — upstream
+      # issue googleapis/release-please#1250). Left alone, the lock keeps the old
+      # pyvolr-core version and the first `cargo` run after a release dirties the
+      # tree. We re-sync the lock with cargo and commit it onto the release PR so
+      # the merged commit and tag are self-consistent.
+      #
+      # This MUST run on every invocation, not once: release-please force-pushes
+      # its release branch each run, so any prior lock commit is wiped and has to
+      # be re-applied on top of the freshly-pushed branch. The step is idempotent
+      # (only commits when Cargo.lock actually changed).
+      - name: Sync workspace Cargo.lock on the release PR
+        if: ${{ steps.release.outputs.pr }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Check out the release PR branch with the App token persisted so the
+          # follow-up push is authenticated as the App (and therefore triggers
+          # downstream workflows, same as release-please's own commits).
+          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 1
+      - name: Set up Rust
+        if: ${{ steps.release.outputs.pr }}
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - name: Regenerate and commit Cargo.lock
+        if: ${{ steps.release.outputs.pr }}
+        run: |
+          # Re-read crates/core/Cargo.toml and rewrite only the pyvolr-core entry
+          # in each lock that pins it; path members need no registry resolution,
+          # so transitive deps are left untouched.
+          #
+          # Two locks carry pyvolr-core: the root workspace lock and fuzz/Cargo.lock
+          # (fuzz/ is a standalone workspace excluded from the root one). Both must
+          # be synced — fuzz.yml now enforces fuzz/Cargo.lock with `cargo fetch
+          # --locked`, so leaving its pyvolr-core entry stale would fail nightly
+          # fuzz after every release.
+          cargo update -p pyvolr-core
+          cargo update -p pyvolr-core --manifest-path fuzz/Cargo.toml
+          if git diff --quiet -- Cargo.lock fuzz/Cargo.lock; then
+            echo "Lockfiles already in sync; nothing to commit."
+            exit 0
+          fi
+          git config user.name "pyvolr-release-bot[bot]"
+          git config user.email "${{ secrets.RELEASE_PLEASE_APP_ID }}+pyvolr-release-bot[bot]@users.noreply.github.com"
+          git commit -m "chore: sync Cargo.lock with release version" -- Cargo.lock fuzz/Cargo.lock
+          git push origin "HEAD:${{ fromJSON(steps.release.outputs.pr).headBranchName }}"

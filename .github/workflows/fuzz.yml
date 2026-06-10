@@ -40,6 +40,15 @@ jobs:
           workspaces: fuzz
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
+      - name: Verify fuzz/Cargo.lock is in sync
+        # `cargo fuzz run` has no --locked passthrough (cargo-fuzz only forwards
+        # -Z via unstable_flags), so we enforce the committed lock here instead:
+        # `cargo fetch --locked` errors if the lockfile would need updating, and
+        # warms the dependency cache for the build below. Dependabot (/fuzz entry)
+        # is the mover that keeps these pins fresh; release-please re-syncs the
+        # pyvolr-core path entry so this check stays green across releases.
+        run: cargo fetch --locked
+        working-directory: fuzz
       - name: Fuzz ${{ matrix.target }}
         # PR runs: 60s smoke per target.  Nightly/manual: 300s per target.
         run: |
