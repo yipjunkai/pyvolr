@@ -400,11 +400,14 @@ def _render(
     for text in legend.get_texts():
         text.set_color(text_color)
 
+    # Footer derives from the bench data itself (labels are stamped at bench
+    # time, e.g. "pyvolr 0.1.3"), so it can never drift from what was measured.
+    pyvolr_label = next(n for n in results if n.startswith("pyvolr"))
+    competitor_labels = ", ".join(n for n in results if not n.startswith("pyvolr"))
     fig.text(
         0.5,
         0.01,
-        "Apple M4 Pro · pyvolr 0.1.2 (local) · "
-        "vs vollib 1.0.7, py_vollib_vectorized 0.1.1, blackscholes 0.2.0, QuantLib 1.42.1, quantforge 0.1.1",
+        f"Apple M4 Pro · {pyvolr_label} (local) · vs {competitor_labels}",
         ha="center",
         fontsize=9,
         color=muted_color,
