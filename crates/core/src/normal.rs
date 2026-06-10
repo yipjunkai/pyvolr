@@ -1,6 +1,7 @@
 //! Standard normal distribution helpers and special functions used by the IV solver.
 //!
-//! `cdf` uses `libm::erf` for high accuracy across the full range.
+//! `cdf` uses `libm::erf`/`erfc` (sign-split to avoid tail cancellation) on
+//! `|x| < 4` and an `erfcx` form beyond, for high accuracy across the full range.
 //!
 //! `erfcx` and `inverse_cdf` are needed by the "Let's Be Rational" IV solver
 //! (Jäckel, 2015) — `erfcx` for stable normalised-Black evaluation in the deep
@@ -19,11 +20,20 @@ const INV_SQRT_PI: f64 = 0.564_189_583_547_756_3;
 
 /// Standard normal CDF: `P(Z <= x)` for `Z ~ N(0, 1)`.
 ///
-/// For `|x| <= 4` the direct `0.5·(1 + erf(x/√2))` formula has ~1 ULP accuracy.
-/// In the tails the `1 + erf` cancellation costs digits (`libm::erf` saturates
-/// at ±1 once `|x/√2| > ~5.93`), so we switch to the `erfcx` form
+/// For `|x| < 4`, split by sign to avoid catastrophic cancellation:
+///   - `x >= 0`: `0.5·(1 + erf(x/√2))` — two non-negative terms, ~1 ULP.
+///   - `x < 0`:  `0.5·erfc(|x|/√2)` — the complementary form computes the small
+///     tail value directly. The naive `0.5·(1 + erf(x/√2))` here subtracts two
+///     near-equal quantities (`erf(x/√2) → -1`) and bleeds precision — ~1e-12
+///     relative near `x = -4`, vs the ~1 ULP it claims. `erfc` sidesteps it;
+///     the residual is the tail's intrinsic conditioning (a few ULP near
+///     `|x| = 4`, falling to ~1 ULP toward `x = 0`).
+///
+/// For `|x| >= 4` the `erf`/`erfc` arguments saturate (`libm::erf` reaches ±1
+/// once `|x/√2| > ~5.93`), so we switch to the `erfcx` form
 /// `cdf(x) = 0.5·exp(-x²/2)·erfcx(|x|/√2)` (`x < 0`) or `1 - same` (`x > 0`),
-/// which retains full f64 precision down to `f64::MIN_POSITIVE` and beyond.
+/// which stays accurate — conditioning-limited, a few ULP — down to
+/// `f64::MIN_POSITIVE` and below.
 ///
 /// The tail branch is marked `#[cold]` so LLVM lays out the fast path
 /// contiguously — most BSM-pricing calls hit `|x| < 4` (typical `d1`, `d2`).
@@ -35,6 +45,12 @@ const INV_SQRT_PI: f64 = 0.564_189_583_547_756_3;
 #[inline]
 pub fn cdf(x: f64) -> f64 {
     if x.abs() < 4.0 {
+        // `1 + erf(x/√2)` cancels for x < 0, so route the negative half through
+        // `erfc`, which evaluates the small complementary value without the
+        // subtraction. The positive half adds two non-negative terms cleanly.
+        if x < 0.0 {
+            return 0.5 * libm::erfc(-x * INV_SQRT_2);
+        }
         return 0.5 * (1.0 + libm::erf(x * INV_SQRT_2));
     }
     cdf_tail(x)
@@ -264,6 +280,27 @@ mod tests {
         assert_relative_eq!(cdf(1.0), 0.841_344_746_068_542_9, epsilon = 1e-12);
         assert_relative_eq!(cdf(1.96), 0.975_002_104_851_780_8, epsilon = 1e-12);
         assert_relative_eq!(cdf(2.576), 0.995_002_467_684_265, epsilon = 1e-12);
+    }
+
+    // Negative-tail goldens: 50-digit mpmath Φ(x) rounded to f64. The
+    // pre-2026-06 `0.5·(1 + erf(x/√2))` branch lost ~1e-12 relative here to
+    // `1 + erf(→ -1)` cancellation (it would fail this test at `1e-14`); the
+    // sign-split `erfc` form is conditioning-limited to a few ULP. Regenerate
+    // with `mpmath.mp.dps=60; 0.5*erfc(-x/sqrt(2))`.
+    #[test]
+    fn cdf_negative_tail_matches_mpmath() {
+        for &(x, expected) in &[
+            (-3.99_f64, 3.303_664_762_940_242e-5),
+            (-3.9_f64, 4.809_634_401_760_273_6e-5),
+            (-3.5_f64, 0.000_232_629_079_035_525_04),
+            (-3.0_f64, 0.001_349_898_031_630_094_6),
+            (-2.5_f64, 0.006_209_665_325_776_135),
+            (-2.0_f64, 0.022_750_131_948_179_21),
+            (-1.5_f64, 0.066_807_201_268_858_07),
+            (-1.0_f64, 0.158_655_253_931_457_05),
+        ] {
+            assert_relative_eq!(cdf(x), expected, max_relative = 1e-14);
+        }
     }
 
     #[test]
