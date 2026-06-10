@@ -124,11 +124,14 @@ fuzz_target!(|inp: Input| {
         let lhs = cd - pd;
         let rhs = (-inp.q * inp.t).exp();
         let err = (lhs - rhs).abs();
-        // 1e-12 absolute is comfortably above f64 roundoff for `exp(-q*t)`
-        // at any realistic `q*t` (worst case `q*t = 99`, `exp` is computed
-        // to ~1 ULP).
+        // `cd`/`pd` are separately-rounded products `disc·Φ(±d1)`, so `cd − pd`
+        // recovers `disc·(Φ(d1)+Φ(−d1)) = disc` only to ~1 ULP *relative*, and
+        // `disc = exp(−qT)` is unbounded above for q < 0 (the prior absolute
+        // bound silently assumed q ≥ 0, so `exp(−qT) ≤ 1`). Scale by the
+        // magnitude; 1e-12 relative still catches a gross break like the old
+        // deep-OTM `cdf(d1) − 1.0` put-delta form (which broke parity by ~disc).
         assert!(
-            err < 1e-12,
+            err <= 1e-12 * rhs.max(1.0),
             "put-call delta parity violated: cd-pd={lhs} exp(-qT)={rhs} err={err}"
         );
     }

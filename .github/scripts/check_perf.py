@@ -58,43 +58,43 @@ from pathlib import Path
 #
 # Ceilings are set comfortably above the CI-measured worst case to absorb
 # day-to-day GitHub-runner noise.
+#
+# === ENGINE-REROUTE TRANSITION: ceilings below marked (T) are TEMPORARY ===
+# bsm::price now evaluates the normalised-Black engine (the IV solver's ~1-ULP
+# b(x, s)) instead of the textbook S*N(d1) - K*N(d2), fixing the deep-OTM
+# cancellation at the cost of ~2x pricing throughput (the engine's region
+# dispatch + erfcx is far heavier than two cdf calls). CI (x86_64) measured
+# +90% to +148% on every price-touching bench (Greeks/IV are unaffected); M4
+# shows vectorised pricing ~2.3x (10k: 152x -> 68x vs py_vollib). This is a
+# DELIBERATE, accepted one-time baseline shift.
+#
+# The gate compares PR-head vs PR-base, so once this PR merges the engine
+# becomes the base and these paths return to ~0%. The (T) ceilings exist only
+# to let this transition PR through and MUST be reset (production paths -> 0.10
+# default; experiment harnesses -> 0.50) in the next PR -- leaving them is the
+# stale-threshold trap the 2026-06 audit flagged. Tracked as a follow-up.
 PER_BENCH_THRESHOLDS: dict[str, float] = {
-    # IV solver (intrinsically more work per call than Newton+bisection).
-    # CI runs observed at +77.80%/+79.41% (scalar) and +73.47%/+73.40% (vec);
-    # ceilings give ~5 pp margin over the worst observation:
+    # IV solver (LBR) -- NOT touched by the engine reroute; pre-existing
+    # overrides for the Newton->LBR transition baked into the base. (Audit:
+    # candidates for a reset to 0.10 too, but out of scope here.)
     "iv_solve_scalar_atm": 0.85,
     "iv_solve_vec": 0.80,
-    # Note: iv_solve_scalar_otm_short does not need an override — CI shows
-    # LBR is *faster* than Newton+bisection on this case (-10.88%), because
-    # Newton degenerated to bisection at OTM short-expiry where vega is small
-    # and LBR's bounded Householder iteration stays at ≤ 2 iters regardless.
-    # The default 10% ceiling guards against future regression.
-    #
-    # Price/Greek benches affected by the cdf erfcx-tail branch:
-    "bsm_price_scalar": 0.30,
-    "black76_price_scalar": 0.30,
-    #
-    # Audit (audit/mechanical-sympathy) bench harnesses that exist to
-    # document measurement-backed decisions, not to gate perf regressions:
-    #
-    # - `cdf_branch_experiment` (F2 rejected): branchless arm is 14-69%
-    #   slower by design; comparing branched vs branchless absolutely is
-    #   the point.
-    # - `bsm_price_flag_dispatch` (F5 rejected): three input distributions
-    #   that map to different inner-loop branch outcomes; expected to drift
-    #   together under noise but the relative ratio matters more.
-    # - `parallel/*` (F4 / F4b experiment harness): three sub-benches
-    #   (bsm_price, iv_solve, greeks_all) x {serial, rayon} x four N values.
-    #   The slow-serial-large-N arms intentionally take milliseconds; their
-    #   absolute runtime is the input to the threshold-tuning decision, not
-    #   a perf gate.
-    #
-    # 50% ceiling absorbs runner-side noise without false-positiving on
-    # the documented alternatives. Real perf regressions in production
-    # code paths show up on the dedicated gates (`bsm_greeks_all_vec`,
-    # `bsm_price_vec`, `iv_solve_vec`, etc.) which keep the default 10%.
-    "cdf_branch_experiment": 0.50,
-    "bsm_price_flag_dispatch": 0.50,
+    # (T) Production price paths -- engine reroute, reset to 0.10 after merge:
+    "bsm_price_scalar": 1.80,
+    "black76_price_scalar": 1.80,
+    "bsm_price_vec": 1.80,
+    "parallel_bsm_price": 1.80,
+    # Audit (audit/mechanical-sympathy) bench harnesses that document
+    # measurement-backed decisions rather than gate production perf. Normally
+    # 0.50 (variant-comparison noise); (T)-bumped because they also exercise the
+    # rerouted price / changed cdf -- reset to 0.50 after merge:
+    # - cdf_branch_experiment (F2 rejected): branched vs branchless cdf.
+    # - bsm_price_flag_dispatch (F5 rejected): call/put branch distributions.
+    "cdf_branch_experiment": 1.80,
+    "bsm_price_flag_dispatch": 1.80,
+    # parallel/* (F4 / F4b) experiment harness -- kept at 0.50. NB: this key
+    # matches only a literal `parallel/...` group; the price sub-bench is
+    # parallel_bsm_price (its own (T) entry above), iv/greeks are unaffected.
     "parallel": 0.50,
 }
 
