@@ -93,8 +93,14 @@ fuzz_target!(|inp: Input| {
         let lhs = cd - pd;
         let rhs = (-inp.r * inp.t).exp();
         let err = (lhs - rhs).abs();
+        // `cd`/`pd` are separately-rounded products `disc·Φ(±d1)`, so `cd − pd`
+        // recovers `disc·(Φ(d1)+Φ(−d1)) = disc` only to ~1 ULP *relative*, and
+        // `disc = exp(−rT)` is unbounded above for r < 0 — an absolute bound
+        // spuriously fails once `disc·ε > 1e-12`. Scale by the magnitude; 1e-12
+        // relative still catches a gross break like the old deep-OTM
+        // `cdf(d1) − 1.0` put-delta form (which broke parity by ~disc).
         assert!(
-            err < 1e-12,
+            err <= 1e-12 * rhs.max(1.0),
             "black76 put-call delta parity violated: cd-pd={lhs} exp(-rT)={rhs} err={err}"
         );
     }
