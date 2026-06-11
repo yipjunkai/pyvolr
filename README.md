@@ -236,7 +236,7 @@ pyvolr/
 `py_vollib` died because nobody was paid to maintain it. pyvolr is engineered to outlive its maintainer:
 
 - **One-click releases** via release-please + PyPI Trusted Publishing — PyPI publication needs no stored credentials (OIDC), and release-please authenticates as a repo-scoped GitHub App rather than a user PAT, so the credential survives a maintainer handoff
-- **Nightly differential tests** against `py_vollib` on a Python 3.10 sidecar to catch numerical drift
+- **Release-gated differential tests** against `py_vollib` (Python 3.10 sidecar) — every release is blocked unless pyvolr still matches the reference
 - **Wide CI matrix** (Python 3.10–3.14 × Linux/macOS/Windows) — the specific failure mode that killed the predecessor
 - **All GitHub Actions pinned** with weekly Dependabot bumps, hardening against supply-chain attacks
 - **Hand-off plan documented** in [GOVERNANCE.md](GOVERNANCE.md)
