@@ -28,55 +28,25 @@ from pathlib import Path
 # equals the key exactly, or when it is a child path (criterion groups expose
 # `<group>/<param>` under target/criterion/).
 #
-# This table stays small by design. The gate compares PR-head against PR-base,
-# so an override only earns its keep while a cost is being *introduced* (head
-# has it, base does not); once the PR merges, the cost is in the base and the
-# bench returns to ~0%, so the override is dropped in the next PR rather than
-# kept forever. Leaving a merged-in override behind is a stale-threshold trap:
-# it silently masks the next real regression on that bench. Two price-path
-# shifts were retired exactly this way -- the `erfcx` deep-OTM cdf tail and the
-# normalised-Black price engine -- and the price benches now ride the default
-# 10% ceiling again.
+# The table is currently EMPTY, and that is the steady state. The gate compares
+# PR-head against PR-base, so an override only earns its keep while a cost is
+# being *introduced* (head has it, base does not); once the PR merges, the cost
+# is in the base, the bench returns to ~0%, and the override must be dropped in
+# the next PR. Leaving a merged-in override behind is a stale-threshold trap:
+# it silently masks the next real regression on that bench. Three shifts were
+# retired exactly this way -- the Newton->LBR IV solver (#10, ceilings 0.85/
+# 0.80), the `erfcx` deep-OTM cdf tail, and the normalised-Black price engine
+# (#19, ceilings 1.80) -- every bench now rides the default 10% ceiling.
 #
-# Ceilings are set comfortably above the CI-measured worst case to absorb
-# day-to-day GitHub-runner noise.
-PER_BENCH_THRESHOLDS: dict[str, float] = {
-    # IV solver (Jäckel "Let's Be Rational", #10): the bounded Householder
-    # iteration is intrinsically more work per call than the old
-    # Newton+bisection -- CI observed +77.8%/+79.4% (scalar) and +73.5%/+73.4%
-    # (vec) at introduction, and the ceilings give ~5 pp margin. Like the
-    # retired price overrides these are head-vs-base stale (the LBR cost is in
-    # the base, so a normal PR sees ~0% here too) and are candidates for a reset
-    # to the 0.10 default; kept for now, out of scope of the audit follow-up
-    # that removed the engine-reroute ceilings.
-    "iv_solve_scalar_atm": 0.85,
-    "iv_solve_vec": 0.80,
-    # iv_solve_scalar_otm_short needs no override: CI shows LBR is *faster*
-    # there (-10.88%) because Newton degenerated to bisection at OTM short
-    # expiry (small vega) while LBR stays at <= 2 Householder iters. The
-    # default 10% ceiling guards it against future regression.
-    #
-    # Audit (audit/mechanical-sympathy) bench harnesses that document
-    # measurement-backed decisions rather than gate production perf:
-    # - cdf_branch_experiment (F2 rejected): the branchless arm is 14-69%
-    #   slower by design, so comparing branched vs branchless absolutely is the
-    #   point; the 50% ceiling just absorbs runner noise.
-    # - bsm_price_flag_dispatch (F5 rejected): three input distributions mapping
-    #   to different inner-loop branches; the relative ratio matters more than
-    #   the absolute, which drifts together under noise.
-    "cdf_branch_experiment": 0.50,
-    "bsm_price_flag_dispatch": 0.50,
-    # The F4/F4b parallel experiment harness (serial-vs-rayon across N, the input
-    # to the rayon-threshold decision -- not a production gate) is deliberately
-    # absent. Its groups are declared `benchmark_group("parallel/<sub>")`, but
-    # criterion flattens the '/' in a group name to '_', so the on-disk paths are
-    # parallel_bsm_price / parallel_greeks_all / parallel_iv_solve -- a bare
-    # `parallel` prefix key matches none of them (the perf-gate log confirms they
-    # run on the default 10%). Production price / greeks / iv are gated by
-    # bsm_price_vec / bsm_greeks_all_vec / iv_solve_vec respectively. If a noisy
-    # rayon-small-N arm ever flakes the gate, widen that sub-bench with its own
-    # explicit `parallel_<sub>` key (e.g. 0.50) -- not a `parallel` prefix.
-}
+# The gate also no longer measures the decision-record experiment harness
+# (F2 branchless cdf, F5 flag dispatch, F4/F4b serial-vs-rayon): it lives in
+# benches/experiments.rs, outside `--bench pricing`, so its variant-comparison
+# arms (slower by design) need no ceilings here.
+#
+# When adding an entry: set it comfortably above the CI-measured worst case
+# (runner noise is 3-8%), document the measurement, and mark the PR that will
+# remove it.
+PER_BENCH_THRESHOLDS: dict[str, float] = {}
 
 
 def threshold_for(rel: str, default: float) -> tuple[float, bool]:
