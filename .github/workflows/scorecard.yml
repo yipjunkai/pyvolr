@@ -26,6 +26,7 @@ jobs:
   analysis:
     name: scorecard analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       security-events: write # upload SARIF to GitHub Code Scanning
       id-token: write # OIDC token to publish results to OSSF

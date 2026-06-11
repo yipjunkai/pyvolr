@@ -1,0 +1,118 @@
+name: audit
+
+# Dependency-tree audits (cargo-audit / pip-audit). These answer "did the
+# *world* change?" — a newly published RustSec/PyPA advisory reddens them with
+# no change to this repo — so they run on a daily clock plus the PRs and pushes
+# that actually change the dependency tree, instead of on every PR. The
+# PR-attributable security checks (dependency-review, CodeQL) live in
+# security.yml.
+#
+# A scheduled failure files (or updates) a single tracking issue via the alert
+# job below; without that, a red cron dies unseen in the Actions tab.
+
+on:
+  schedule:
+    - cron: "0 5 * * *" # daily 05:00 UTC (fuzz runs 03:00, stale 07:00)
+  workflow_dispatch:
+  pull_request:
+    # GitHub Actions YAML has no anchors — keep this list and the push list
+    # below identical. Every file that pins a dependency version.
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/core/Cargo.toml"
+      - "fuzz/Cargo.toml"
+      - "fuzz/Cargo.lock"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/audit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/core/Cargo.toml"
+      - "fuzz/Cargo.toml"
+      - "fuzz/Cargo.lock"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/audit.yml"
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - name: Install cargo-audit
+        # Prebuilt, checksum-verified binary — the previous `cargo install`
+        # compiled it from source on every run (~3 min).
+        uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
+        with:
+          tool: cargo-audit@0.22.2
+      - name: Audit the workspace lockfile
+        run: cargo audit --deny warnings
+      - name: Audit the fuzz workspace lockfile
+        # fuzz/ is a standalone workspace with its own committed lock; the
+        # default invocation above only reads ./Cargo.lock.
+        run: cargo audit --deny warnings --file fuzz/Cargo.lock
+
+  pip-audit:
+    name: pip audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.12"
+      - name: Export the locked dependency set
+        # Audit what CI actually installs — the uv.lock pins — not a fresh
+        # re-resolution of pyproject.toml, which can disagree with the lock in
+        # both directions (pass on a vulnerable pinned version, or fail on a
+        # version the lock never selects).
+        run: uv export --locked --all-extras --no-emit-project --no-hashes --output-file /tmp/requirements-audit.txt
+      - name: Install pip-audit
+        run: |
+          uv venv
+          uv pip install 'pip-audit==2.10.1'
+      - name: Audit the locked dependencies
+        # --no-deps: the export is already a complete pinned set; no
+        # resolution wanted or needed.
+        run: uv run pip-audit --no-deps -r /tmp/requirements-audit.txt
+
+  alert:
+    name: file tracking issue
+    needs: [cargo-audit, pip-audit]
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Create or update the audit-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create audit-failure --color D93F0B \
+            --description "Scheduled dependency audit is failing" --force
+          existing=$(gh issue list --label audit-failure --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Scheduled audit still failing: $RUN_URL"
+          else
+            gh issue create --title "Scheduled dependency audit failing" \
+              --label audit-failure \
+              --body "The daily \`cargo audit\` / \`pip-audit\` run failed — most likely a new advisory against a pinned dependency. Run: $RUN_URL"
+          fi
