@@ -49,5 +49,12 @@ criterion = { version = "0.8", default-features = false, features = [
 name = "pricing"
 harness = false
 
+# Decision-record experiment harness (F2/F4/F5) — run locally when
+# re-evaluating a rejected alternative; the CI perf-gate runs `--bench
+# pricing` only.
+[[bench]]
+name = "experiments"
+harness = false
+
 [lints]
 workspace = true

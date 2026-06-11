@@ -1,0 +1,411 @@
+// criterion_group! / criterion_main! generate undocumented items; the file
+// itself is documented by the //! block below.
+#![allow(missing_docs)]
+
+//! Decision-record experiment harness (audit/mechanical-sympathy).
+//!
+//! Measurement-backed REJECTED alternatives (F2 branchless cdf, F5 flag
+//! dispatch) and the serial-vs-rayon data (F4 / F4b) that set
+//! `PARALLEL_THRESHOLD` / `GREEKS_PARALLEL_THRESHOLD` in `lib.rs`. These
+//! benches document decisions; they do not gate production performance —
+//! the CI perf-gate runs `--bench pricing` only. Re-run locally when
+//! re-evaluating one of those decisions:
+//!
+//! ```text
+//! cargo bench --bench experiments
+//! ```
+
+use std::hint::black_box;
+
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use pyvolr_core::normal::erfcx;
+use pyvolr_core::{bsm, greeks, iv};
+use rayon::prelude::*;
+
+const VEC_LEN: usize = 10_000;
+const INV_SQRT_2: f64 = std::f64::consts::FRAC_1_SQRT_2;
+
+/// Experimental branchless `cdf`: always uses the `exp + erfcx` formulation,
+/// avoiding the `|x| < 4` data-dependent branch that `normal::cdf` takes.
+///
+/// The single `if x >= 0.0` left over compiles to a `csel` on aarch64 (a
+/// conditional move with no branch). The cost is ~50-70% more compute per
+/// call (one `erfcx` + one `exp` vs one `erf`), so branchless can only win
+/// if removing the `|x| < 4` branch produces an auto-vectorisation gain
+/// big enough to pay for the extra transcendentals. See
+/// `bench_cdf_branch_experiment` below for the measurement.
+fn cdf_branchless(x: f64) -> f64 {
+    let p = 0.5 * (-0.5 * x * x).exp() * erfcx(x.abs() * INV_SQRT_2);
+    if x >= 0.0 {
+        1.0 - p
+    } else {
+        p
+    }
+}
+
+/// Copy of `bsm::price`'s body with `cdf` replaced by `cdf_branchless`.
+/// Used only by `bench_cdf_branch_experiment`.
+fn bsm_price_branchless(
+    flag: bsm::Flag,
+    s: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    q: f64,
+    sigma: f64,
+) -> f64 {
+    if t <= 0.0 {
+        return match flag {
+            bsm::Flag::Call => (s - k).max(0.0),
+            bsm::Flag::Put => (k - s).max(0.0),
+        };
+    }
+    if sigma <= 0.0 {
+        let forward = s * ((r - q) * t).exp();
+        let disc_r = (-r * t).exp();
+        return disc_r
+            * match flag {
+                bsm::Flag::Call => (forward - k).max(0.0),
+                bsm::Flag::Put => (k - forward).max(0.0),
+            };
+    }
+    let (d1, d2) = bsm::d1_d2(s, k, t, r, q, sigma);
+    let disc_q = (-q * t).exp();
+    let disc_r = (-r * t).exp();
+    match flag {
+        bsm::Flag::Call => s * disc_q * cdf_branchless(d1) - k * disc_r * cdf_branchless(d2),
+        bsm::Flag::Put => k * disc_r * cdf_branchless(-d2) - s * disc_q * cdf_branchless(-d1),
+    }
+}
+
+/// F2 investigation bench (audit/mechanical-sympathy): does removing the
+/// `|x| < 4` branch in `normal::cdf` help, hurt, or neither, when measured
+/// through `bsm::price`?
+///
+/// **Verdict (2026-05, Apple M4 Pro): rejected.** Branchless is 14-69%
+/// slower across all three input distributions below. `libm` is scalar
+/// with its own internal branches, so removing the outer `|x|<4` test
+/// does not enable auto-vectorisation; branchless just pays for two
+/// transcendentals (`erfcx`+`exp`) instead of one (`erf`) on every call.
+///
+/// Input distributions:
+/// - `narrow`: strikes 80..120 — d1 in [-1.0, +1.8], branch always taken,
+///   no mispredicts possible. Tests pure per-call overhead.
+/// - `wide`: strikes 20..200 — d1 in [-3.9, +11.6], one contiguous
+///   boundary crossing, still highly predictable.
+/// - `shuffled`: `wide` strikes in Knuth-multiplicative-permuted order.
+///   Worst case for the branch predictor.
+fn bench_cdf_branch_experiment(c: &mut Criterion) {
+    let narrow: Vec<f64> = (0..VEC_LEN)
+        .map(|i| 80.0 + 40.0 * (i as f64) / (VEC_LEN as f64))
+        .collect();
+    let wide: Vec<f64> = (0..VEC_LEN)
+        .map(|i| 20.0 + 180.0 * (i as f64) / (VEC_LEN as f64))
+        .collect();
+    // Deterministic permutation: i -> (i * 2654435769) mod VEC_LEN. The
+    // multiplier is coprime to 10000, so this visits each index exactly
+    // once in a hash-scrambled order. Reproducible across runs.
+    let shuffled: Vec<f64> = (0..VEC_LEN)
+        .map(|i| {
+            let j = (i.wrapping_mul(2_654_435_769)) % VEC_LEN;
+            wide[j]
+        })
+        .collect();
+
+    let cases: [(&str, &[f64]); 3] = [
+        ("narrow", &narrow),
+        ("wide", &wide),
+        ("shuffled", &shuffled),
+    ];
+    let mut group = c.benchmark_group("cdf_branch_experiment");
+    group.throughput(Throughput::Elements(VEC_LEN as u64));
+    for (label, strikes) in &cases {
+        group.bench_function(BenchmarkId::new("branched", *label), |b| {
+            b.iter(|| {
+                let mut out = Vec::with_capacity(VEC_LEN);
+                for &k in *strikes {
+                    out.push(bsm::price(
+                        bsm::Flag::Call,
+                        black_box(100.0),
+                        black_box(k),
+                        black_box(0.5),
+                        black_box(0.05),
+                        black_box(0.0),
+                        black_box(0.20),
+                    ));
+                }
+                out
+            });
+        });
+        group.bench_function(BenchmarkId::new("branchless", *label), |b| {
+            b.iter(|| {
+                let mut out = Vec::with_capacity(VEC_LEN);
+                for &k in *strikes {
+                    out.push(bsm_price_branchless(
+                        bsm::Flag::Call,
+                        black_box(100.0),
+                        black_box(k),
+                        black_box(0.5),
+                        black_box(0.05),
+                        black_box(0.0),
+                        black_box(0.20),
+                    ));
+                }
+                out
+            });
+        });
+    }
+    group.finish();
+}
+
+/// F5 investigation bench (audit/mechanical-sympathy): does the per-row
+/// `Flag::from_i8(flag[i])` + downstream `match flag` block optimisation
+/// of `bsm::price` in the `PyO3` dispatch loop?
+///
+/// **Verdict (2026-05, Apple M4 Pro): rejected.** Under `lto = "fat"` the
+/// compiler already collapses the FFI path: `uniform_call` and `uniform_put`
+/// run within ±0.5% of each other and within noise of the "compiler-knows-
+/// flag" baseline (`bsm_price_vec`). `interleaved` is ~3% slower, at the
+/// edge of the noise floor and uninteresting in production where strikes
+/// are typically smile-sorted (one flag uniform per call).
+///
+/// Structural reason: the inner kernel calls `libm::erf` (scalar, with
+/// internal branches — see F2 finding), so removing the flag match cannot
+/// enable cross-row auto-vectorisation. Upper bound on F5 headroom is the
+/// mispredict cost on interleaved inputs (~3%), which uniform inputs don't
+/// pay anyway. Not worth a specialised dispatch path.
+///
+/// `bsm_price_vec` above benches with a constant `bsm::Flag::Call` — the
+/// compiler can see the match's outcome and inline-prune. That's the
+/// "compiler-knows" optimum.
+///
+/// This bench mirrors the actual `PyO3` inner loop:
+/// ```ignore
+/// for i in 0..n {
+///     out.push(bsm::price(Flag::from_i8(flag[i]), s[i], ...));
+/// }
+/// ```
+///
+/// Three flag distributions:
+/// - `uniform_call`: flag[i] = +1 — branch perfectly predictable, but
+///   compiler doesn't know it statically.
+/// - `uniform_put`:  flag[i] = -1 — same, opposite arm.
+/// - `interleaved`:  flag[i] = ±1 alternating — pathological mispredict.
+fn bench_bsm_price_flag_dispatch(c: &mut Criterion) {
+    let strikes: Vec<f64> = (0..VEC_LEN)
+        .map(|i| 80.0 + 40.0 * (i as f64) / (VEC_LEN as f64))
+        .collect();
+    let uniform_call: Vec<i8> = vec![1; VEC_LEN];
+    let uniform_put: Vec<i8> = vec![-1; VEC_LEN];
+    let interleaved: Vec<i8> = (0..VEC_LEN)
+        .map(|i| if i % 2 == 0 { 1 } else { -1 })
+        .collect();
+
+    let cases: [(&str, &[i8]); 3] = [
+        ("uniform_call", &uniform_call),
+        ("uniform_put", &uniform_put),
+        ("interleaved", &interleaved),
+    ];
+    let mut group = c.benchmark_group("bsm_price_flag_dispatch");
+    group.throughput(Throughput::Elements(VEC_LEN as u64));
+    for (label, flags) in &cases {
+        group.bench_function(BenchmarkId::from_parameter(*label), |b| {
+            b.iter(|| {
+                let mut out = Vec::with_capacity(VEC_LEN);
+                for i in 0..VEC_LEN {
+                    out.push(bsm::price(
+                        bsm::Flag::from_i8(flags[i]),
+                        black_box(100.0),
+                        black_box(strikes[i]),
+                        black_box(0.5),
+                        black_box(0.05),
+                        black_box(0.0),
+                        black_box(0.20),
+                    ));
+                }
+                out
+            });
+        });
+    }
+    group.finish();
+}
+
+/// F4 / F4b investigation bench (audit/mechanical-sympathy): does rayon
+/// parallelisation of the `PyO3` outer loop produce a meaningful win, and
+/// at what `N` does it start to pay (vs rayon's per-call overhead)?
+///
+/// Three sub-benches — one per production entry point that could benefit
+/// from parallelism: `bsm::price` (cheapest, ~14ns/row), `iv::solve`
+/// (most expensive, ~280ns/row), and `greeks::all` (middle, ~19ns/row).
+/// Each runs the inner loop of the production `PyO3` macro — collect `N`
+/// calls into a `Vec` — once serial, once via `(0..N).into_par_iter()`,
+/// with the same inputs in both arms so the only variable is scheduling.
+///
+/// Parameterised over `N ∈ {100, 1_000, 10_000, 100_000}` so we can see:
+/// (a) the per-row cost vs rayon overhead break-even point, and
+/// (b) the N-core saturation ceiling at large N.
+///
+/// The data here drove the threshold choices in `lib.rs`:
+/// `PARALLEL_THRESHOLD = 1024` for IV, `GREEKS_PARALLEL_THRESHOLD = 4096`
+/// for bundled Greeks; pricing was not gated (break-even too high).
+#[allow(clippy::too_many_lines)] // three sub-benches × 4 sizes × serial/rayon arms
+fn bench_parallel_dispatch_experiment(c: &mut Criterion) {
+    let sizes: [usize; 4] = [100, 1_000, 10_000, 100_000];
+
+    // bsm::price arm — ~14ns/row, lowest per-row cost in the suite.
+    let mut price_group = c.benchmark_group("parallel/bsm_price");
+    for &n in &sizes {
+        let strikes: Vec<f64> = (0..n)
+            .map(|i| 80.0 + 40.0 * (i as f64) / (n as f64))
+            .collect();
+        price_group.throughput(Throughput::Elements(n as u64));
+        price_group.bench_function(BenchmarkId::new("serial", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .map(|i| {
+                        bsm::price(
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                            black_box(0.20),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+        price_group.bench_function(BenchmarkId::new("rayon", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .into_par_iter()
+                    .map(|i| {
+                        bsm::price(
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                            black_box(0.20),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+    }
+    price_group.finish();
+
+    // iv::solve arm — ~280ns/row, highest per-row cost; most likely to win.
+    let mut iv_group = c.benchmark_group("parallel/iv_solve");
+    for &n in &sizes {
+        let strikes: Vec<f64> = (0..n)
+            .map(|i| 80.0 + 40.0 * (i as f64) / (n as f64))
+            .collect();
+        let targets: Vec<f64> = strikes
+            .iter()
+            .map(|&k| bsm::price(bsm::Flag::Call, 100.0, k, 0.5, 0.05, 0.0, 0.20))
+            .collect();
+        iv_group.throughput(Throughput::Elements(n as u64));
+        iv_group.bench_function(BenchmarkId::new("serial", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .map(|i| {
+                        iv::solve(
+                            black_box(targets[i]),
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+        iv_group.bench_function(BenchmarkId::new("rayon", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .into_par_iter()
+                    .map(|i| {
+                        iv::solve(
+                            black_box(targets[i]),
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+    }
+    iv_group.finish();
+
+    // greeks::all arm — ~19ns/row (~15x cheaper than iv::solve, ~1.4x more
+    // expensive than bsm::price). Break-even at ~N=2600; the production
+    // gate (`GREEKS_PARALLEL_THRESHOLD = 4096` in `lib.rs`) is set above
+    // that with margin. Five outputs per row → parallel path collects
+    // tuples and unzips serially (matches the PyO3 macro implementation).
+    let mut greeks_group = c.benchmark_group("parallel/greeks_all");
+    for &n in &sizes {
+        let strikes: Vec<f64> = (0..n)
+            .map(|i| 80.0 + 40.0 * (i as f64) / (n as f64))
+            .collect();
+        greeks_group.throughput(Throughput::Elements(n as u64));
+        greeks_group.bench_function(BenchmarkId::new("serial", n), |b| {
+            b.iter(|| {
+                let out: Vec<(f64, f64, f64, f64, f64)> = (0..n)
+                    .map(|i| {
+                        greeks::all(
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                            black_box(0.20),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+        greeks_group.bench_function(BenchmarkId::new("rayon", n), |b| {
+            b.iter(|| {
+                let out: Vec<(f64, f64, f64, f64, f64)> = (0..n)
+                    .into_par_iter()
+                    .map(|i| {
+                        greeks::all(
+                            bsm::Flag::Call,
+                            black_box(100.0),
+                            black_box(strikes[i]),
+                            black_box(0.5),
+                            black_box(0.05),
+                            black_box(0.0),
+                            black_box(0.20),
+                        )
+                    })
+                    .collect();
+                out
+            });
+        });
+    }
+    greeks_group.finish();
+}
+
+criterion_group!(
+    experiments,
+    bench_cdf_branch_experiment,
+    bench_bsm_price_flag_dispatch,
+    bench_parallel_dispatch_experiment,
+);
+criterion_main!(experiments);
