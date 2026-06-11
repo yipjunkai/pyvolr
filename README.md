@@ -193,7 +193,7 @@ pyvolr/
 │   │   ├── greeks.rs        # Delta, gamma, theta, vega, rho
 │   │   ├── iv.rs            # Jäckel "Let's Be Rational" IV solver (Householder-4, ≤2 iters)
 │   │   └── normal.rs        # Φ / φ, erfcx (Lentz CF), inverse CDF (Wichura AS241)
-│   └── benches/             # criterion benches gating the README's perf claims
+│   └── benches/             # criterion: perf-gate contracts (pricing) + experiment harness (experiments)
 ├── bench/                   # Python-level speed/precision scripts (dev-only, not in CI)
 │   ├── compare_py_vollib.py            # reproduces the perf table
 │   ├── compare_competitors.py          # reproduces the perf chart (6 libraries)
