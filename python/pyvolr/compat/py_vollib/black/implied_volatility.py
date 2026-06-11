@@ -7,7 +7,11 @@ preserves that exact argument order — flag is last either way.
 
 from __future__ import annotations
 
+import math
+
 from pyvolr import black76 as _b76
+
+from .._bounds import raise_for_iv_price
 
 __all__ = ["implied_volatility"]
 
@@ -16,5 +20,14 @@ def implied_volatility(price: float, F: float, K: float, r: float, t: float, fla
     """Black-76 implied volatility from a market price.
 
     Argument order matches py_vollib.black exactly: (price, F, K, r, t, flag).
+
+    Mirrors py_vollib's `BelowIntrinsicException` / `AboveMaximumException`
+    contract (from `pyvolr.compat.py_vollib.exceptions`) on out-of-bounds
+    prices; the modern `pyvolr.black76.implied_vol` returns NaN instead.
     """
-    return float(_b76.implied_vol(price, flag, F, K, t, r))
+    sigma = float(_b76.implied_vol(price, flag, F, K, t, r))
+    if math.isnan(sigma):
+        # Black-76: underlying is the forward F, discounted at r (q = r).
+        disc_r = math.exp(-r * t)
+        raise_for_iv_price(price, F * disc_r, K * disc_r, flag)
+    return sigma
