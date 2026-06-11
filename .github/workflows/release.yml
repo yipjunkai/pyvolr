@@ -23,9 +23,9 @@ jobs:
     name: build sdist
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: "3.12"
       - name: Build sdist
@@ -56,7 +56,7 @@ jobs:
           - { runner: macos-14,         target: x86_64+aarch64, cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*", archs: "x86_64 arm64" }
           - { runner: windows-latest,   target: x86_64,         cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*", archs: "auto" }
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.12"
@@ -64,7 +64,7 @@ jobs:
       - name: Add x86_64-apple-darwin Rust target (macOS only)
         if: matrix.platform.runner == 'macos-14'
         run: rustup target add x86_64-apple-darwin
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
       - name: Export locked test deps for in-wheel verification
         # The export carries environment markers (numpy is forked 2.2.x/2.4.x
         # across Python versions) and hashes, so the same file pins every
@@ -156,7 +156,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: dist
