@@ -27,6 +27,7 @@ For day-to-day work, `maturin develop` (no `--release`) is faster but slower at 
 - [ ] Tests added (and run green locally)
 - [ ] If algorithmic: property test added (parity, monotonicity, roundtrip, etc.)
 - [ ] If numerical: golden reference value documented (textbook, paper, or trusted external)
+- [ ] If it changes numerical outputs: disclosed in the commit subject + body and the affected goldens updated (see [docs/numerical-stability.md](docs/numerical-stability.md))
 - [ ] If a public API change: type stubs in `python/pyvolr/_core.pyi` updated
 - [ ] Conventional commit message (`feat:` / `fix:` / `docs:` / ...) — release-please reads these to generate the changelog automatically; don't hand-edit `CHANGELOG.md`
 - [ ] `cargo fmt && cargo clippy && ruff check && ruff format && pyright` all clean
@@ -66,6 +67,7 @@ For day-to-day work, `maturin develop` (no `--release`) is faster but slower at 
 - All public functions must handle the edge cases: `T=0`, `sigma=0`, deep ITM, deep OTM. Document the chosen behavior in the docstring.
 - Implied volatility must converge or return `nan` — never silently return a wrong value.
 - Property tests are required for new public API.
+- Changes to a returned value follow the [numerical stability policy](docs/numerical-stability.md): an accuracy refinement ships as a disclosed `fix:`/`perf:` patch; a change to documented behaviour (return value, exception, unit) is breaking.
 
 ## Reporting py_vollib drift
 

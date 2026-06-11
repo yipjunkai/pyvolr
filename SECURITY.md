@@ -28,6 +28,6 @@ Acknowledgement is targeted within 72 hours. There is no separate email contact 
 
 ## What is not in scope
 
-- Correctness disagreements within published numerical tolerance (open a regular issue)
+- Correctness disagreements within the [published numerical tolerance](docs/numerical-stability.md) (open a regular issue)
 - Performance issues (open a regular issue)
 - Feature requests (open a regular issue)
