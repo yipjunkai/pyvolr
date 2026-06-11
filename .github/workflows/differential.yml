@@ -1,13 +1,18 @@
 name: differential
 
-# Compares pyvolr's compat shim to the reference py_vollib library across a
-# grid of inputs. Catches numerical drift over time as either library evolves.
-# py_vollib doesn't import on Python 3.12+ (the _testcapi bug — see docs/why.md),
-# so this runs on a 3.10 sidecar.
+# Compares pyvolr's compat shim to the reference py_vollib across a grid of
+# inputs — the gate behind the "matches py_vollib" claim. Invoked as a release
+# gate (release.yml calls it via workflow_call before publishing wheels) and on
+# demand (workflow_dispatch). py_vollib doesn't import on Python 3.12+ (the
+# _testcapi bug — see docs/why.md), so this runs on a 3.10 sidecar.
+#
+# No schedule: pyvolr's outputs only move on our own commits and py_vollib is
+# abandoned (frozen), so a nightly run just recomputed an identical result. The
+# signal that matters — "are we about to publish something that no longer
+# matches?" — is the release gate, not the clock.
 
 on:
-  schedule:
-    - cron: "0 4 * * *" # daily at 04:00 UTC
+  workflow_call:
   workflow_dispatch:
 
 permissions:

@@ -120,9 +120,16 @@ jobs:
           path: wheelhouse/*.whl
           retention-days: 7
 
+  # Gate the publish on the py_vollib differential: the 20,448-case "matches
+  # reference" claim must hold before any wheel reaches PyPI. Runs in parallel
+  # with the wheel builds; publish-pypi needs all three.
+  differential:
+    name: differential vs py_vollib
+    uses: ./.github/workflows/differential.yml
+
   publish-pypi:
     name: publish to PyPI
-    needs: [build-sdist, build-wheels]
+    needs: [build-sdist, build-wheels, differential]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     environment:
