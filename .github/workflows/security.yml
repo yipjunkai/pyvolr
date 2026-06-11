@@ -1,11 +1,31 @@
 name: security
 
+# PR-attributable security checks: dependency-review diffs the dependency
+# changes a PR itself introduces; CodeQL scans the code at this commit. Both
+# are deterministic for a given diff. The dependency-tree audits (cargo-audit
+# / pip-audit) — which go red when a new upstream advisory is published, with
+# no change here — live in audit.yml on a daily schedule plus dep-tree paths.
+
 on:
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE*"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/FUNDING.yml"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE*"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/FUNDING.yml"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
   schedule:
-    - cron: "0 6 * * 1"  # weekly Monday
+    - cron: "0 6 * * 1" # weekly Monday — picks up new CodeQL query packs
   workflow_dispatch:
 
 concurrency:
@@ -16,34 +36,10 @@ permissions:
   contents: read
 
 jobs:
-  cargo-audit:
-    name: cargo audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - name: Install cargo-audit
-        run: cargo install --locked cargo-audit
-      - run: cargo audit --deny warnings
-
-  pip-audit:
-    name: pip audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          python-version: "3.12"
-      - name: Install pip-audit
-        run: |
-          uv venv
-          uv pip install pip-audit
-      - name: Audit declared dependencies
-        run: uv run pip-audit --requirement <(uv pip compile pyproject.toml)
-
   dependency-review:
     name: dependency review
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     permissions:
       pull-requests: write
@@ -58,6 +54,7 @@ jobs:
   codeql-python:
     name: codeql (python)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       security-events: write
       contents: read

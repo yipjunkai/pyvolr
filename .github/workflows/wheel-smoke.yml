@@ -1,0 +1,58 @@
+name: wheel-smoke
+
+# Builds ONE production wheel — the linux x86_64 abi3 wheel, the same build
+# release.yml runs at tag time — and runs the in-wheel test suite, on PRs that
+# touch packaging. Wheels are otherwise first built at tag time, after the tag
+# and release already exist; this is the pre-tag canary for packaging breaks
+# (maturin config, cibuildwheel majors, abi3 issues). Advisory: deliberately
+# not part of the ci-passed aggregate.
+#
+# The CIBW_* environment below MIRRORS release.yml's build-wheels job (linux
+# leg). If you change one, change both.
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "Cargo.toml"
+      - "crates/core/Cargo.toml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/wheel-smoke.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: wheel-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: linux abi3 wheel
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - name: Export locked test deps for in-wheel verification
+        run: uv export --locked --extra test --no-emit-project --output-file requirements-wheel-test.txt
+      - name: Build + test the abi3 wheel with cibuildwheel
+        uses: pypa/cibuildwheel@f03ac7617d6cff873ccf24cc0d567ef5ba5a9e6d # v4.0.0
+        env:
+          # One build ID: the abi3 wheel that serves every CPython >= 3.10.
+          CIBW_BUILD: "cp310-manylinux_x86_64"
+          CIBW_BUILD_FRONTEND: "build"
+          CIBW_BEFORE_ALL_LINUX: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal"
+          CIBW_ENVIRONMENT_LINUX: 'PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN=stable'
+          CIBW_BEFORE_BUILD: "pip install maturin"
+          CIBW_BEFORE_TEST: "pip install -r {project}/requirements-wheel-test.txt"
+          CIBW_TEST_COMMAND: "pytest {project}/tests -ra"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: wheel-smoke
+          path: wheelhouse/*.whl
+          retention-days: 3

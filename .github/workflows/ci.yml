@@ -32,6 +32,7 @@ jobs:
   lint:
     name: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
@@ -62,20 +63,28 @@ jobs:
       - name: pyright
         run: uv run --no-sync pyright
       - name: actionlint
+        # Version-pinned and checksum-verified: a tampered release asset
+        # fails sha256sum -c instead of running inside the lint gate.
         run: |
           curl -sL -o actionlint.tar.gz \
             https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz" | sha256sum -c
           tar -xzf actionlint.tar.gz actionlint
           ./actionlint -color
       - name: taplo
+        # Same treatment — previously fetched releases/latest (floating).
         run: |
-          curl -sL https://github.com/tamasfe/taplo/releases/latest/download/taplo-linux-x86_64.gz | gunzip > taplo
+          curl -sL -o taplo.gz \
+            https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-x86_64.gz
+          echo "8fe196b894ccf9072f98d4e1013a180306e17d244830b03986ee5e8eabeb6156  taplo.gz" | sha256sum -c
+          gunzip taplo.gz
           chmod +x taplo
           ./taplo fmt --check
 
   test-rust:
     name: test (rust)
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -96,6 +105,7 @@ jobs:
   test-python:
     name: test (py${{ matrix.python }} / ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -124,6 +134,7 @@ jobs:
   property-tests:
     name: property tests (extended)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
@@ -141,6 +152,7 @@ jobs:
   msrv:
     name: msrv
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # master
@@ -162,6 +174,7 @@ jobs:
     if: ${{ always() }}
     needs: [lint, test-rust, test-python, property-tests, msrv]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Aggregate required-job results
         env:
