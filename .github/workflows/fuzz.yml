@@ -80,7 +80,12 @@ jobs:
             DURATION=300
           fi
           mkdir -p corpus/${{ matrix.target }}
-          cargo fuzz run ${{ matrix.target }} corpus/${{ matrix.target }} seeds/${{ matrix.target }} -- -max_total_time=$DURATION
+          # --target pinned to the runner's host triple: install-action ships
+          # cargo-fuzz as a static MUSL binary, and cargo-fuzz defaults the
+          # build target to its own compile target — i.e. musl, where ASAN +
+          # statically-linked libc is unsupported ("sanitizer is incompatible
+          # with statically linked libc").
+          cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }} corpus/${{ matrix.target }} seeds/${{ matrix.target }} -- -max_total_time=$DURATION
         working-directory: fuzz
       - name: Upload crashes (on failure)
         if: failure()
