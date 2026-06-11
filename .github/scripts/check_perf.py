@@ -28,74 +28,54 @@ from pathlib import Path
 # equals the key exactly, or when it is a child path (criterion groups expose
 # `<group>/<param>` under target/criterion/).
 #
-# LBR IV solver (Jäckel "Let's Be Rational") replaces the prior
-# Newton+bisection in PR feat/lbr-iv.  Two sources of regression:
-#
-# (1) IV solver:  LBR evaluates a 4-region `b(x, s)` dispatcher and runs
-#     a bounded Householder-4 iteration; Newton called a single
-#     `bsm::price` per iter and stopped at 1e-10 absolute (~1e-6 IV).
-#     The tradeoff buys ~10^7 more IV precision and bounded worst-case
-#     latency at the no-arbitrage boundary.  Local measurements (Apple
-#     M4 Pro) show +30-55%; GitHub-hosted Linux runners measure +73-79%
-#     on the same benches — slower libm, shared CPU.
-#
-# (2) Price/Greeks:  `normal::cdf` switches to an `erfcx`-based form for
-#     `|z| > 4` so `bsm::price` stays f64-accurate in the deep OTM tail
-#     (libm::erf saturates at +/-1 past z/sqrt(2) ≈ 5.93, which made the
-#     prior cdf lossy and broke LBR's lower-map roundtrip at extreme x).
-#     The added branch on the common path is amortised away in the
-#     vectorised benches (bsm_price_vec is actually *faster* on CI) but
-#     remains visible on the scalar paths.  CI measurements:
-#       initial implementation:           bsm_price_scalar +30%
-#       after #[cold] on tail:            bsm_price_scalar +30% (no win on x86_64)
-#       after INV_SQRT_2 + drop
-#         #[inline(never)] on tail:       bsm_price_scalar +23%
-#     The remaining 23-26% is the irreducible cost on Linux x86_64 of
-#     keeping bsm::price f64-accurate at deep OTM, which the differential
-#     test against py_vollib requires.  Splitting cdf into fast and precise
-#     variants would dodge the cost but breaks the differential at the
-#     |d1| ~ 5-6 inputs in the differential grid.
+# This table stays small by design. The gate compares PR-head against PR-base,
+# so an override only earns its keep while a cost is being *introduced* (head
+# has it, base does not); once the PR merges, the cost is in the base and the
+# bench returns to ~0%, so the override is dropped in the next PR rather than
+# kept forever. Leaving a merged-in override behind is a stale-threshold trap:
+# it silently masks the next real regression on that bench. Two price-path
+# shifts were retired exactly this way -- the `erfcx` deep-OTM cdf tail and the
+# normalised-Black price engine -- and the price benches now ride the default
+# 10% ceiling again.
 #
 # Ceilings are set comfortably above the CI-measured worst case to absorb
 # day-to-day GitHub-runner noise.
-#
-# === ENGINE-REROUTE TRANSITION: ceilings below marked (T) are TEMPORARY ===
-# bsm::price now evaluates the normalised-Black engine (the IV solver's ~1-ULP
-# b(x, s)) instead of the textbook S*N(d1) - K*N(d2), fixing the deep-OTM
-# cancellation at the cost of ~2x pricing throughput (the engine's region
-# dispatch + erfcx is far heavier than two cdf calls). CI (x86_64) measured
-# +90% to +148% on every price-touching bench (Greeks/IV are unaffected); M4
-# shows vectorised pricing ~2.3x (10k: 152x -> 68x vs py_vollib). This is a
-# DELIBERATE, accepted one-time baseline shift.
-#
-# The gate compares PR-head vs PR-base, so once this PR merges the engine
-# becomes the base and these paths return to ~0%. The (T) ceilings exist only
-# to let this transition PR through and MUST be reset (production paths -> 0.10
-# default; experiment harnesses -> 0.50) in the next PR -- leaving them is the
-# stale-threshold trap the 2026-06 audit flagged. Tracked as a follow-up.
 PER_BENCH_THRESHOLDS: dict[str, float] = {
-    # IV solver (LBR) -- NOT touched by the engine reroute; pre-existing
-    # overrides for the Newton->LBR transition baked into the base. (Audit:
-    # candidates for a reset to 0.10 too, but out of scope here.)
+    # IV solver (Jäckel "Let's Be Rational", #10): the bounded Householder
+    # iteration is intrinsically more work per call than the old
+    # Newton+bisection -- CI observed +77.8%/+79.4% (scalar) and +73.5%/+73.4%
+    # (vec) at introduction, and the ceilings give ~5 pp margin. Like the
+    # retired price overrides these are head-vs-base stale (the LBR cost is in
+    # the base, so a normal PR sees ~0% here too) and are candidates for a reset
+    # to the 0.10 default; kept for now, out of scope of the audit follow-up
+    # that removed the engine-reroute ceilings.
     "iv_solve_scalar_atm": 0.85,
     "iv_solve_vec": 0.80,
-    # (T) Production price paths -- engine reroute, reset to 0.10 after merge:
-    "bsm_price_scalar": 1.80,
-    "black76_price_scalar": 1.80,
-    "bsm_price_vec": 1.80,
-    "parallel_bsm_price": 1.80,
+    # iv_solve_scalar_otm_short needs no override: CI shows LBR is *faster*
+    # there (-10.88%) because Newton degenerated to bisection at OTM short
+    # expiry (small vega) while LBR stays at <= 2 Householder iters. The
+    # default 10% ceiling guards it against future regression.
+    #
     # Audit (audit/mechanical-sympathy) bench harnesses that document
-    # measurement-backed decisions rather than gate production perf. Normally
-    # 0.50 (variant-comparison noise); (T)-bumped because they also exercise the
-    # rerouted price / changed cdf -- reset to 0.50 after merge:
-    # - cdf_branch_experiment (F2 rejected): branched vs branchless cdf.
-    # - bsm_price_flag_dispatch (F5 rejected): call/put branch distributions.
-    "cdf_branch_experiment": 1.80,
-    "bsm_price_flag_dispatch": 1.80,
-    # parallel/* (F4 / F4b) experiment harness -- kept at 0.50. NB: this key
-    # matches only a literal `parallel/...` group; the price sub-bench is
-    # parallel_bsm_price (its own (T) entry above), iv/greeks are unaffected.
-    "parallel": 0.50,
+    # measurement-backed decisions rather than gate production perf:
+    # - cdf_branch_experiment (F2 rejected): the branchless arm is 14-69%
+    #   slower by design, so comparing branched vs branchless absolutely is the
+    #   point; the 50% ceiling just absorbs runner noise.
+    # - bsm_price_flag_dispatch (F5 rejected): three input distributions mapping
+    #   to different inner-loop branches; the relative ratio matters more than
+    #   the absolute, which drifts together under noise.
+    "cdf_branch_experiment": 0.50,
+    "bsm_price_flag_dispatch": 0.50,
+    # The F4/F4b parallel experiment harness (serial-vs-rayon across N, the input
+    # to the rayon-threshold decision -- not a production gate) is deliberately
+    # absent. Its groups are declared `benchmark_group("parallel/<sub>")`, but
+    # criterion flattens the '/' in a group name to '_', so the on-disk paths are
+    # parallel_bsm_price / parallel_greeks_all / parallel_iv_solve -- a bare
+    # `parallel` prefix key matches none of them (the perf-gate log confirms they
+    # run on the default 10%). Production price / greeks / iv are gated by
+    # bsm_price_vec / bsm_greeks_all_vec / iv_solve_vec respectively. If a noisy
+    # rayon-small-N arm ever flakes the gate, widen that sub-bench with its own
+    # explicit `parallel_<sub>` key (e.g. 0.50) -- not a `parallel` prefix.
 }
 
 
