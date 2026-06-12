@@ -1,5 +1,8 @@
 # Pre-commit hooks for pyvolr. Install with: `pre-commit install`.
-# Auto-runs via pre-commit.ci on pull requests (free for OSS).
+# Local convenience only: CI runs the same checks directly (ci.yml lint job)
+# and pre-commit.ci is NOT enabled. The `rev:` pins below therefore have no
+# automated mover (Dependabot has no pre-commit ecosystem) — refresh them
+# opportunistically with `pre-commit autoupdate`.
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

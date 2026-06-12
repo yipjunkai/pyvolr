@@ -80,15 +80,16 @@ jobs:
         # re-resolution of pyproject.toml, which can disagree with the lock in
         # both directions (pass on a vulnerable pinned version, or fail on a
         # version the lock never selects).
-        run: uv export --locked --all-extras --no-emit-project --no-hashes --output-file /tmp/requirements-audit.txt
-      - name: Install pip-audit
-        run: |
-          uv venv
-          uv pip install 'pip-audit==2.10.1'
+        run: uv export --locked --all-extras --all-groups --no-emit-project --no-hashes --output-file /tmp/requirements-audit.txt
+      - name: Install pip-audit from uv.lock
+        # pip-audit is declared in the `audit` dependency-group (pyproject), so
+        # its version is lockfile-managed and Dependabot keeps it moving — no
+        # hand-maintained pin here.
+        run: uv sync --locked --only-group audit
       - name: Audit the locked dependencies
         # --no-deps: the export is already a complete pinned set; no
         # resolution wanted or needed.
-        run: uv run pip-audit --no-deps -r /tmp/requirements-audit.txt
+        run: uv run --no-sync pip-audit --no-deps -r /tmp/requirements-audit.txt
 
   alert:
     name: file tracking issue
