@@ -80,7 +80,7 @@ Or via [`uv`](https://github.com/astral-sh/uv):
 uv pip install pyvolr
 ```
 
-Pre-built wheels are published for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and Windows (x86_64) across Python 3.10–3.14, plus free-threaded builds for 3.13t and 3.14t.
+Pre-built wheels are published for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and Windows (x86_64) across Python 3.10–3.14, plus a free-threaded build for 3.14t. (3.13t wheels were last published at pyvolr 0.1.4 — cibuildwheel 4 dropped Python 3.13 free-threading, which never left experimental status.)
 
 ### Tested on
 
@@ -90,7 +90,7 @@ Pre-built wheels are published for Linux (x86_64, aarch64), macOS (Intel, Apple 
 | macOS   |  ✅  |  ✅  |  ✅  |  ✅  |  ✅  |
 | Windows |  —   |  —   |  ✅  |  ✅  |  ✅  |
 
-Every push and PR runs the full `pytest` + `cargo test` suites across the matrix above. Windows × {3.10, 3.11} are skipped intentionally to keep CI minutes reasonable — the wheels themselves still build for those combinations and are published. Free-threaded wheels (3.13t, 3.14t) are built and exercised through `cibuildwheel`'s in-wheel test pass on every release across Linux/macOS/Windows.
+Every push and PR runs the full `pytest` + `cargo test` suites across the matrix above. Windows × {3.10, 3.11} are skipped intentionally to keep CI minutes reasonable — the wheels themselves still build for those combinations and are published. The free-threaded wheel (3.14t) is built and exercised through `cibuildwheel`'s in-wheel test pass on every release across Linux/macOS/Windows, and on packaging-touching PRs via the wheel-smoke check.
 
 From source (requires Rust):
 
@@ -143,7 +143,7 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
 - **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree (including `py_vollib.black`) for one-import-line migration
 - **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
-- **Free-threaded Python ready** — dedicated wheels for 3.13t and 3.14t; the Rust core releases the GIL around the math, so pricing scales across threads without a process pool
+- **Free-threaded Python ready** — a dedicated 3.14t wheel; the Rust core releases the GIL around the math, so pricing scales across threads without a process pool
 - **Typed end-to-end** — pyright-strict library code, full type stubs for the Rust extension
 
 ## 🗺️ Coming soon
