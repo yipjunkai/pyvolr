@@ -2,5 +2,10 @@
 # cargo-fuzz requires nightly for -Zsanitizer=address and other unstable flags.
 # This file shadows the workspace-root rust-toolchain.toml (which pins stable
 # for everything else) only within fuzz/.
-channel = "nightly"
+#
+# Pinned to a dated nightly so the scheduled fuzz job cannot go red on a
+# random-day nightly breakage (the audit's floating-`nightly` finding). Bump
+# opportunistically — e.g. alongside fuzz dependency PRs — and keep the
+# toolchain input in .github/workflows/fuzz.yml in sync.
+channel = "nightly-2026-05-26"
 profile = "minimal"
