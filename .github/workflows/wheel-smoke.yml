@@ -40,11 +40,17 @@ jobs:
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
       - name: Export locked test deps for in-wheel verification
         run: uv export --locked --extra test --no-emit-project --output-file requirements-wheel-test.txt
-      - name: Build + test the abi3 wheel with cibuildwheel
+      - name: Build + test the abi3 + free-threaded wheels with cibuildwheel
         uses: pypa/cibuildwheel@f03ac7617d6cff873ccf24cc0d567ef5ba5a9e6d # v4.0.0
         env:
-          # One build ID: the abi3 wheel that serves every CPython >= 3.10.
-          CIBW_BUILD: "cp310-manylinux_x86_64"
+          # Two build IDs: the abi3 wheel that serves every GIL CPython >= 3.10,
+          # plus one free-threaded build. The t-selector keeps the smoke covering
+          # the same selector classes as release.yml's matrix — a cibuildwheel
+          # major that changes free-threading opt-in semantics (v4 removed the
+          # v3 CIBW_ENABLE group; the 2026-06 dry-run failed on all four
+          # platforms) now breaks here, on the PR, instead of at tag time. The
+          # in-wheel pytest also gives 3.14t its only pre-release test exercise.
+          CIBW_BUILD: "cp310-manylinux_x86_64 cp314t-manylinux_x86_64"
           CIBW_BUILD_FRONTEND: "build"
           CIBW_BEFORE_ALL_LINUX: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal"
           CIBW_ENVIRONMENT_LINUX: 'PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN=stable'
