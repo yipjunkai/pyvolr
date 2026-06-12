@@ -92,12 +92,11 @@ jobs:
           # delocate then rejects the wheel because the manifest says 10.9.
           # 10.13 (High Sierra, 2017) is the modern floor; safe for all users.
           CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=10.13"
-          # Required to opt into building free-threaded CPython wheels (cp313t-*,
-          # cp314t-*). The flag is marked deprecated in cibuildwheel v3.4 but is
-          # still functionally required — removing it makes CIBW_BUILD selectors
-          # for those Python versions error out as "Invalid build selector".
-          # Revisit once cibuildwheel v4 enables free-threading by default.
-          CIBW_ENABLE: "cpython-freethreading"
+          # Free-threaded CPython wheels (cp313t-*, cp314t-*) need no opt-in
+          # under cibuildwheel v4: the v3 `CIBW_ENABLE: cpython-freethreading`
+          # group was REMOVED in v4 (free-threading is on by default) and
+          # setting it now fails with "Unknown enable group" — the 2026-06
+          # release dry-run caught exactly that on all four platforms.
           CIBW_BUILD_FRONTEND: "build"
           # Linux wheels build inside manylinux containers that don't have Rust.
           # Install rustup per-container with `--profile minimal --default-toolchain stable`
