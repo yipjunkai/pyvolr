@@ -96,3 +96,43 @@ jobs:
           name: fuzz-crashes-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}/
           retention-days: 30
+
+  alert:
+    name: file tracking issue
+    needs: [fuzz]
+    # The nightly run is the only unattended fuzz trigger — a crash found at
+    # 03:00 must not sit silently in the Actions tab. A scheduled failure
+    # files (or refreshes) the tracking issue; a scheduled success closes it,
+    # so the issue exists exactly while the fuzz lane is red. PR and dispatch
+    # runs never touch issues (a human is watching those).
+    if: ${{ always() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Sync the fuzz-crash issue to the run result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FUZZ_RESULT: ${{ needs.fuzz.result }}
+        run: |
+          existing=$(gh issue list --label fuzz-crash --state open \
+            --json number --jq '.[0].number // empty')
+          if [ "$FUZZ_RESULT" = "failure" ]; then
+            gh label create fuzz-crash --color B60205 \
+              --description "Scheduled fuzz run is failing" --force
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "Nightly fuzz still failing: $RUN_URL"
+            else
+              gh issue create --title "Nightly fuzz run failed — possible crash found" \
+                --label fuzz-crash \
+                --body "A scheduled fuzz target failed. If it is a real crash, the reproducing input is attached to the run as a \`fuzz-crashes-<target>\` artifact (30-day retention) — minimize and fix, then this issue closes itself on the next green night. Run: $RUN_URL"
+            fi
+          elif [ "$FUZZ_RESULT" = "success" ]; then
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" \
+                --comment "Resolved — the nightly fuzz run is green again: $RUN_URL"
+            fi
+          fi
