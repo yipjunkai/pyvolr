@@ -52,15 +52,17 @@ jobs:
       matrix:
         platform:
           # cibw entries cover both abi3 builds (cp310-* picks up everything 3.10+ as a single
-          # stable-ABI wheel) and per-version free-threaded builds (cp313t-* / cp314t-*).
+          # stable-ABI wheel) and the free-threaded build (cp314t-*). No cp313t-*: cibuildwheel
+          # 4.x removed Python 3.13 free-threading support entirely ("Invalid build selector:
+          # 'cp313t-*'" — the 2026-06 dry-run); 3.13t wheels were last published at 0.1.4.
           #
           # macOS: macos-14 (Apple Silicon) builds BOTH x86_64 (cross-compiled via Apple SDK)
           # and arm64 (native).  This avoids the dying macos-13 (Intel) runner pool, which has
           # become unreliable for queue times.
-          - { runner: ubuntu-latest,    target: x86_64,         cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*", archs: "auto" }
-          - { runner: ubuntu-24.04-arm, target: aarch64,        cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*", archs: "auto" }
-          - { runner: macos-14,         target: x86_64+aarch64, cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*", archs: "x86_64 arm64" }
-          - { runner: windows-latest,   target: x86_64,         cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp313t-* cp314t-*", archs: "auto" }
+          - { runner: ubuntu-latest,    target: x86_64,         cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp314t-*", archs: "auto" }
+          - { runner: ubuntu-24.04-arm, target: aarch64,        cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp314t-*", archs: "auto" }
+          - { runner: macos-14,         target: x86_64+aarch64, cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp314t-*", archs: "x86_64 arm64" }
+          - { runner: windows-latest,   target: x86_64,         cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp314t-*", archs: "auto" }
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
@@ -92,9 +94,9 @@ jobs:
           # delocate then rejects the wheel because the manifest says 10.9.
           # 10.13 (High Sierra, 2017) is the modern floor; safe for all users.
           CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=10.13"
-          # Free-threaded CPython wheels (cp313t-*, cp314t-*) need no opt-in
-          # under cibuildwheel v4: the v3 `CIBW_ENABLE: cpython-freethreading`
-          # group was REMOVED in v4 (free-threading is on by default) and
+          # The free-threaded CPython wheel (cp314t-*) needs no opt-in under
+          # cibuildwheel v4: the v3 `CIBW_ENABLE: cpython-freethreading` group
+          # was REMOVED in v4 (free-threading is on by default for 3.14t+) and
           # setting it now fails with "Unknown enable group" — the 2026-06
           # release dry-run caught exactly that on all four platforms.
           CIBW_BUILD_FRONTEND: "build"
