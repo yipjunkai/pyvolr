@@ -51,6 +51,13 @@ Changelog = "https://github.com/yipjunkai/pyvolr/blob/main/CHANGELOG.md"
 test = ["pytest>=9.0", "pytest-benchmark>=5.0", "hypothesis>=6.150"]
 dev = ["maturin>=1.13", "ruff>=0.15", "pyright>=1.1.400", "pre-commit>=4.0"]
 
+# CI-only tooling (PEP 735 groups -- not package extras, never ships in
+# metadata). Declared here so the exact version lives in uv.lock and
+# Dependabot's uv ecosystem keeps it moving; workflows install it with
+# `uv sync --only-group <name>` instead of a hand-pinned `pip install x==`.
+[dependency-groups]
+audit = ["pip-audit>=2.10"]
+
 [tool.maturin]
 module-name = "pyvolr._core"
 python-source = "python"

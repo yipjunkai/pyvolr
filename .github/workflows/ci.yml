@@ -71,15 +71,15 @@ jobs:
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz" | sha256sum -c
           tar -xzf actionlint.tar.gz actionlint
           ./actionlint -color
+      - name: Install taplo
+        # Prebuilt binary, checksum-verified internally against install-action's
+        # signed manifests — replaces a hand-maintained curl + sha256 pin.
+        # (actionlint above keeps the curl form: install-action doesn't carry it.)
+        uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
+        with:
+          tool: taplo@0.10.0
       - name: taplo
-        # Same treatment — previously fetched releases/latest (floating).
-        run: |
-          curl -sL -o taplo.gz \
-            https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-x86_64.gz
-          echo "8fe196b894ccf9072f98d4e1013a180306e17d244830b03986ee5e8eabeb6156  taplo.gz" | sha256sum -c
-          gunzip taplo.gz
-          chmod +x taplo
-          ./taplo fmt --check
+        run: taplo fmt --check
 
   test-rust:
     name: test (rust)
