@@ -80,7 +80,7 @@ Or via [`uv`](https://github.com/astral-sh/uv):
 uv pip install pyvolr
 ```
 
-Pre-built wheels are published for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and Windows (x86_64) across Python 3.10–3.14, plus a free-threaded build for 3.14t. (3.13t wheels were last published at pyvolr 0.1.4 — cibuildwheel 4 dropped Python 3.13 free-threading, which never left experimental status.)
+Pre-built wheels are published for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and Windows (x86_64) across Python 3.10–3.14, plus a free-threaded build for 3.14t. (3.13t wheels were last published at pyvolr 0.1.3 — cibuildwheel 4 dropped Python 3.13 free-threading, which never left experimental status.)
 
 ### Tested on
 

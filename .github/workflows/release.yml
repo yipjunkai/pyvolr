@@ -54,7 +54,7 @@ jobs:
           # cibw entries cover both abi3 builds (cp310-* picks up everything 3.10+ as a single
           # stable-ABI wheel) and the free-threaded build (cp314t-*). No cp313t-*: cibuildwheel
           # 4.x removed Python 3.13 free-threading support entirely ("Invalid build selector:
-          # 'cp313t-*'" — the 2026-06 dry-run); 3.13t wheels were last published at 0.1.4.
+          # 'cp313t-*'" — the 2026-06 dry-run); 3.13t wheels were last published at 0.1.3.
           #
           # macOS: macos-14 (Apple Silicon) builds BOTH x86_64 (cross-compiled via Apple SDK)
           # and arm64 (native).  This avoids the dying macos-13 (Intel) runner pool, which has
