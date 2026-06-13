@@ -43,10 +43,17 @@ def normalize_flag(flag: FlagInput, shape: tuple[int, ...]) -> NDArray[np.int8]:
 
     arr = np.asarray(flag)
     if arr.dtype.kind in ("U", "S", "O"):
-        lower_flat = np.array([str(x).lower() for x in arr.ravel()], dtype="U1")
+        # dtype=str keeps the full element width. A fixed "U1" here once
+        # truncated every entry to its first character BEFORE the validation
+        # below, so 'price' silently priced a put and 'cow' a call.
+        lower_flat = np.array([str(x).lower() for x in arr.ravel()], dtype=str)
         lower = np.reshape(lower_flat, arr.shape)
-        if not np.isin(lower, ("c", "p")).all():
-            raise ValueError("flag array must contain only 'c' or 'p' (case-insensitive)")
+        valid = np.isin(lower, ("c", "p"))
+        if not valid.all():
+            bad = str(lower[~valid].ravel()[0])
+            raise ValueError(
+                f"flag array must contain only 'c' or 'p' (case-insensitive), got {bad!r}"
+            )
         encoded = np.where(lower == "c", 1, -1).astype(np.int8)
         return np.ascontiguousarray(np.broadcast_to(encoded, shape))
     return np.ascontiguousarray(np.broadcast_to(arr.astype(np.int8), shape))

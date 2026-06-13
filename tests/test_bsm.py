@@ -30,6 +30,27 @@ class TestSingleValuePricing:
         with pytest.raises(ValueError, match="flag must be"):
             bs.price("x", S=100, K=100, T=1.0, r=0.05, sigma=0.20)
 
+    def test_invalid_flag_array_raises(self) -> None:
+        with pytest.raises(ValueError, match="flag array"):
+            bs.price(["cow"], S=[100.0], K=[100.0], T=[1.0], r=[0.05], sigma=[0.20])
+
+    def test_flag_array_not_truncated_to_first_char(self) -> None:
+        # Regression: a fixed-width "U1" cast used to truncate 'price' to 'p'
+        # before validation, silently pricing a put.
+        with pytest.raises(ValueError, match="flag array"):
+            bs.price(["price"], S=[100.0], K=[100.0], T=[1.0], r=[0.05], sigma=[0.20])
+
+    def test_flag_array_mixed_case_ok(self) -> None:
+        # The broadcast shape comes from the numeric inputs, so the flag
+        # array needs array-shaped numerics to broadcast against.
+        s = [100.0, 100.0]
+        out = bs.price(np.array(["C", "p"]), S=s, K=100, T=1.0, r=0.05, sigma=0.20)
+        call = bs.price("c", S=100, K=100, T=1.0, r=0.05, sigma=0.20)
+        put = bs.price("p", S=100, K=100, T=1.0, r=0.05, sigma=0.20)
+        assert isinstance(out, np.ndarray)
+        assert out[0] == call
+        assert out[1] == put
+
     def test_with_dividend_yield(self) -> None:
         # With q > 0, call should be cheaper, put more expensive.
         c_no_div = bs.price("c", S=100, K=100, T=1.0, r=0.05, sigma=0.20)
