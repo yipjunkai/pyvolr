@@ -45,7 +45,8 @@ pub fn vega(f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
     greeks::vega(f, k, t, r, r, sigma)
 }
 
-/// Derivative of price with respect to time-to-expiry (per year, annualized).
+/// Calendar theta: MINUS the derivative of price with respect to
+/// time-to-expiry, per year (typically negative). See `greeks::theta`.
 pub fn theta(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
     greeks::theta(flag, f, k, t, r, r, sigma)
 }
