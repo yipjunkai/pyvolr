@@ -13,7 +13,7 @@
 - [ ] Property tests added (if new public API)
 - [ ] Differential test added or updated (if numerical change)
 - [ ] Type stubs updated (if `_core` surface changed)
-- [ ] `CHANGELOG.md` updated under `[Unreleased]`
+- [ ] Conventional commit title — release-please generates `CHANGELOG.md` from it; never edit the changelog by hand
 - [ ] py_vollib compat preserved (`tests/test_compat.py` still green)
 
 ## Conventional commit
