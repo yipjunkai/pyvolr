@@ -116,7 +116,11 @@ def theta(
     r: ArrayLike,
     sigma: ArrayLike,
 ) -> _Result:
-    """Derivative of price with respect to time-to-expiry (per year)."""
+    """Calendar theta, per year: minus the derivative of price w.r.t. time-to-expiry.
+
+    Typically negative for long calls and puts (value decays as the clock
+    advances). Divide by 365 for the per-day convention.
+    """
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.black76_theta(flag_arr, *flat)

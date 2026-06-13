@@ -71,7 +71,9 @@ pub fn vega(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
     s * disc_q * pdf(d1) * t.sqrt()
 }
 
-/// Derivative of price with respect to time-to-expiry (per year, annualized).
+/// Calendar theta: MINUS the derivative of price with respect to
+/// time-to-expiry, per year. Typically negative for long options (value
+/// decays as the clock advances).
 /// Divide by 365 (or 252) for the per-day convention used by some libraries.
 pub fn theta(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
     if t <= 0.0 || sigma <= 0.0 {
