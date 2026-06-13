@@ -249,8 +249,12 @@ def test_iv_matches_py_vollib(
 def test_merton_price_matches_py_vollib(
     s: float, k: float, t: float, r: float, sigma: float, flag: str, q: float
 ) -> None:
-    pv = _pv_bsm(flag, s, k, t, r, q, sigma)
-    ref = _pvol_bsm(flag, s, k, t, r, q, sigma)
+    # Signature is (flag, S, K, t, r, sigma, q) in both libraries. These two
+    # calls once passed q and sigma swapped — identically on both sides, so
+    # the test stayed green while exercising vol in {0%, 3%} and dividend
+    # yields of 10-50% instead of the intended grid.
+    pv = _pv_bsm(flag, s, k, t, r, sigma, q)
+    ref = _pvol_bsm(flag, s, k, t, r, sigma, q)
     assert pv == pytest.approx(ref, abs=PRICE_TOL)
 
 
