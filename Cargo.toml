@@ -40,5 +40,12 @@ many_single_char_names = "allow"  # Same reason.
 opt-level = 3
 lto = "fat"
 codegen-units = 1
+# abort, not unwind: production paths are written panic-free on the documented
+# FFI contract (no unwrap/expect; slice indexing only over lengths the wrapper
+# layer equalizes), so unwind tables would buy no recovery — only binary size
+# and landing-pad overhead on the hot path. The accepted tradeoff: a latent
+# panic ABORTS the host interpreter instead of becoming a catchable Python
+# exception (PyO3 can only translate panics under unwind). SECURITY.md treats
+# such crash-propagating panics as in-scope reportable bugs.
 panic = "abort"
 strip = "symbols"

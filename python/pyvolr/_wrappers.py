@@ -12,11 +12,14 @@ should depend on `pyvolr.bs` / `pyvolr.black76`, not on the helpers here.
 
 from __future__ import annotations
 
+from typing import TypedDict
+
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 __all__ = [
     "FlagInput",
+    "Greeks",
     "Result",
     "broadcast_f64",
     "normalize_flag",
@@ -25,6 +28,20 @@ __all__ = [
 
 FlagInput = ArrayLike | str
 Result = float | NDArray[np.float64]
+
+
+class Greeks(TypedDict):
+    """The five standard Greeks; each value is a float or ndarray per the input shape.
+
+    Re-exported as `pyvolr.bs.Greeks` / `pyvolr.black76.Greeks` for user
+    annotations.
+    """
+
+    delta: Result
+    gamma: Result
+    theta: Result
+    vega: Result
+    rho: Result
 
 
 def normalize_flag(flag: FlagInput, shape: tuple[int, ...]) -> NDArray[np.int8]:
