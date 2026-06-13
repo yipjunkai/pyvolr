@@ -22,25 +22,27 @@ Put-call parity for Black-76: `C - P = exp(-r*T) * (F - K)`.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from pyvolr import _core
 from pyvolr._wrappers import (
     FlagInput as _FlagInput,
 )
 from pyvolr._wrappers import (
-    Result as _Result,
-)
-from pyvolr._wrappers import (
+    Greeks,
     broadcast_f64,
     normalize_flag,
     scalar_or_array,
+)
+from pyvolr._wrappers import (
+    Result as _Result,
 )
 
 if TYPE_CHECKING:
     from numpy.typing import ArrayLike
 
 __all__ = [
+    "Greeks",
     "delta",
     "gamma",
     "greeks",
@@ -165,7 +167,10 @@ def implied_vol(
     Batches of ~1000 rows or more run on rayon's global thread pool with
     the GIL released. Set ``RAYON_NUM_THREADS=1`` in the environment to
     force serial execution — useful when calling pyvolr from inside a
-    caller-managed thread pool that already saturates the cores.
+    caller-managed thread pool that already saturates the cores. While the
+    kernel runs (GIL released, and always on free-threaded builds), do not
+    mutate the input arrays from other threads — they are read in place,
+    zero-copy.
 
     .. note::
 
@@ -197,13 +202,15 @@ def greeks(
     T: ArrayLike,
     r: ArrayLike,
     sigma: ArrayLike,
-) -> dict[str, Any]:
-    """Compute the standard five Greeks at once. Returns a dict.
+) -> Greeks:
+    """Compute the standard five Greeks at once. Returns a `Greeks` typed dict.
 
     Single FFI call into a shared Rust kernel — see `pyvolr.bs.greeks` for
     the rationale. Batches of ~4000 rows or more parallelise on rayon's
     global thread pool (GIL released); set ``RAYON_NUM_THREADS=1`` to
-    force serial.
+    force serial. While the kernel runs (GIL released, and always on
+    free-threaded builds), do not mutate the input arrays from other
+    threads — they are read in place, zero-copy.
     """
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()

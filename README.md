@@ -143,7 +143,7 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
 - **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree (including `py_vollib.black`) for one-import-line migration
 - **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
-- **Free-threaded Python ready** — a dedicated 3.14t wheel; the Rust core releases the GIL around the math, so pricing scales across threads without a process pool
+- **Free-threaded Python ready** — a dedicated 3.14t wheel: with no GIL, every entry point scales across threads. On standard (GIL) builds, the large-batch `implied_vol` (≥1k rows) and bundled `greeks` (≥4k rows) kernels release the GIL while rayon works; `price` and single-Greek calls hold it
 - **Typed end-to-end** — pyright-strict library code, full type stubs for the Rust extension
 
 ## 🗺️ Coming soon

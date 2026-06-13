@@ -238,14 +238,15 @@ debug/
 ### venv ###
 # Virtualenv
 # http://iamzed.com/2009/05/07/a-primer-on-virtualenv/
-[Bb]in
-[Ii]nclude
-[Ll]ib
-[Ll]ib64
-[Ll]ocal
-[Ss]cripts
-# CI helper scripts under .github/ are not virtualenv directories — keep them tracked.
-!.github/scripts/
+# Anchored to the repo root: the unanchored forms ([Bb]in etc.) match at ANY
+# depth and would silently swallow a future src/bin/, docs/lib/, scripts/, ...
+# (previously needed a !.github/scripts/ counter-rule exactly because of this).
+/[Bb]in/
+/[Ii]nclude/
+/[Ll]ib/
+/[Ll]ib64/
+/[Ll]ocal/
+/[Ss]cripts/
 pyvenv.cfg
 pip-selfcheck.json
 

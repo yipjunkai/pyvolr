@@ -92,10 +92,15 @@ pub fn pdf(x: f64) -> f64 {
 /// Thacher); Marsaglia (2004) motivates the use of `erfcx` in the Black
 /// formula to avoid catastrophic cancellation.
 ///
-/// Note: the `libm` crate ships its own implementation rather than calling
-/// the platform math library, so direct-path precision is identical across
-/// macOS / Linux / Windows.  Speed varies by hardware (libm's `erf`/`erfc`
-/// is faster on Apple-Silicon arm64 than on `x86_64`), but precision does not.
+/// Note on cross-platform behavior: `libm::erfc` is a vendored
+/// implementation, bit-identical on macOS / Linux / Windows. But the
+/// `(z*z).exp()` beside it — and every `.exp()`/`.ln()`/`.sqrt()` elsewhere
+/// in this crate — is `std` math, i.e. the *platform's* libm, so end-to-end
+/// results may differ between platforms in the last ULP. Bit-for-bit
+/// cross-platform determinism is NOT guaranteed; correctness to the
+/// documented ~1-ULP tolerance is. (Routing all transcendentals through
+/// `libm` would buy bit-determinism at a measured perf cost — a deliberate,
+/// output-changing decision deferred until something needs it.)
 pub fn erfcx(z: f64) -> f64 {
     // Modified-Lentz convergence tolerance and divide-by-zero floor.
     const LENTZ_TINY: f64 = 1e-300;
