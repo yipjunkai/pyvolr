@@ -37,6 +37,21 @@ class TestSingleValuePricing:
         with pytest.raises(ValueError, match="flag must be"):
             black76.price("x", F=100, K=100, T=1.0, r=0.05, sigma=0.20)
 
+    def test_invalid_flag_array_raises(self) -> None:
+        with pytest.raises(ValueError, match="flag array"):
+            black76.price(["call"], F=[100.0], K=[100.0], T=[1.0], r=[0.05], sigma=[0.20])
+
+    def test_flag_array_mixed_case_ok(self) -> None:
+        # The broadcast shape comes from the numeric inputs, so the flag
+        # array needs array-shaped numerics to broadcast against.
+        f = [100.0, 100.0]
+        out = black76.price(np.array(["C", "p"]), F=f, K=100, T=1.0, r=0.05, sigma=0.20)
+        call = black76.price("c", F=100, K=100, T=1.0, r=0.05, sigma=0.20)
+        put = black76.price("p", F=100, K=100, T=1.0, r=0.05, sigma=0.20)
+        assert isinstance(out, np.ndarray)
+        assert out[0] == call
+        assert out[1] == put
+
 
 class TestPutCallParity:
     """C - P = exp(-r*T) * (F - K) for Black-76."""
