@@ -1,7 +1,7 @@
 [package]
 name = "pyvolr-core"
 description = "Rust core for pyvolr: Black-Scholes-Merton pricing, Greeks, and implied volatility."
-version = "0.1.3"                                                                                   # release-please-managed; do not edit manually
+version = "0.1.4"                                                                                   # release-please-managed; do not edit manually
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

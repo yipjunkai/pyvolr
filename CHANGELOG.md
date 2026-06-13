@@ -4,6 +4,27 @@ All notable changes to pyvolr are documented in this file. This file is
 maintained by [release-please](https://github.com/googleapis/release-please)
 from conventional commits — do not edit version sections by hand.
 
+## [0.1.4](https://github.com/yipjunkai/pyvolr/compare/v0.1.3...v0.1.4) (2026-06-12)
+
+
+### Bug Fixes
+
+* **ci:** drop the removed CIBW_ENABLE group for cibuildwheel v4 ([#29](https://github.com/yipjunkai/pyvolr/issues/29)) ([ac36ef3](https://github.com/yipjunkai/pyvolr/commit/ac36ef326413036cab6da2fc7445b644ea510979))
+* **compat:** raise py_vollib's IV bound exceptions instead of returning NaN ([#21](https://github.com/yipjunkai/pyvolr/issues/21)) ([b9eb457](https://github.com/yipjunkai/pyvolr/commit/b9eb45742a044e413c11c1b0452a45686c3f1276))
+* **core:** correct CDF tail, zero-vol delta, and deep-OTM pricing accuracy ([#19](https://github.com/yipjunkai/pyvolr/issues/19)) ([240844e](https://github.com/yipjunkai/pyvolr/commit/240844e8e2bad924719002e9a36340c1a82fe477))
+* drop 3.13t wheels — cibuildwheel 4 removed Python 3.13 free-threading ([#30](https://github.com/yipjunkai/pyvolr/issues/30)) ([ef2b77a](https://github.com/yipjunkai/pyvolr/commit/ef2b77abbebdc5727325089fa59407d43a36a7ee))
+
+
+### Documentation
+
+* 3.13t wheels were last published at 0.1.3, not 0.1.4 ([562553d](https://github.com/yipjunkai/pyvolr/commit/562553da68b5d31bdc1c869c97f55980594af998))
+* differential is a release gate now, not a nightly cron ([37e0725](https://github.com/yipjunkai/pyvolr/commit/37e0725f168989e5bcf6f617abbfb680afe00f31))
+
+
+### Benchmarks
+
+* split the experiment harness out of the perf gate ([#26](https://github.com/yipjunkai/pyvolr/issues/26)) ([91f11eb](https://github.com/yipjunkai/pyvolr/commit/91f11eb38825bf093a1d20f81eefe8775e4a0b8f))
+
 ## [0.1.3](https://github.com/yipjunkai/pyvolr/compare/v0.1.2...v0.1.3) (2026-05-29)
 
 

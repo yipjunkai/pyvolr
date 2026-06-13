@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.4](https://github.com/yipjunkai/pyvolr/compare/v0.1.3...v0.1.4) (2026-06-12)
+
+
+### Bug Fixes
+
+* **core:** correct CDF tail, zero-vol delta, and deep-OTM pricing accuracy ([#19](https://github.com/yipjunkai/pyvolr/issues/19)) ([240844e](https://github.com/yipjunkai/pyvolr/commit/240844e8e2bad924719002e9a36340c1a82fe477))
+
+
+### Benchmarks
+
+* split the experiment harness out of the perf gate ([#26](https://github.com/yipjunkai/pyvolr/issues/26)) ([91f11eb](https://github.com/yipjunkai/pyvolr/commit/91f11eb38825bf093a1d20f81eefe8775e4a0b8f))
+
 ## [0.1.3](https://github.com/yipjunkai/pyvolr/compare/v0.1.2...v0.1.3) (2026-05-29)
 
 
