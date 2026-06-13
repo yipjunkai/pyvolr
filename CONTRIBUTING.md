@@ -26,7 +26,7 @@ For day-to-day work, `maturin develop` (no `--release`) is faster but slower at 
 
 - [ ] Tests added (and run green locally)
 - [ ] If algorithmic: property test added (parity, monotonicity, roundtrip, etc.)
-- [ ] If numerical: golden reference value documented (textbook, paper, or trusted external)
+- [ ] If numerical: golden reference value documented (textbook, paper, or trusted external); mpmath goldens added to `tools/gen_goldens.py` so they stay regenerable
 - [ ] If a public API change: type stubs in `python/pyvolr/_core.pyi` updated
 - [ ] Conventional commit message (`feat:` / `fix:` / `docs:` / ...) — release-please reads these to generate the changelog automatically; don't hand-edit `CHANGELOG.md`
 - [ ] `cargo fmt && cargo clippy && ruff check && ruff format && pyright` all clean
@@ -66,6 +66,7 @@ For day-to-day work, `maturin develop` (no `--release`) is faster but slower at 
 - All public functions must handle the edge cases: `T=0`, `sigma=0`, deep ITM, deep OTM. Document the chosen behavior in the docstring.
 - Implied volatility must converge or return `nan` — never silently return a wrong value.
 - Property tests are required for new public API.
+- The mpmath golden constants pinned in the Rust test modules (`crates/core/src/{normal,bsm,iv}.rs`) are regenerable, not hand-magic: `python tools/gen_goldens.py` recomputes each at 60-digit precision and verifies the in-tree literal still matches (it fails on real drift; `[note]` marks the deep-OTM values that sit at the f64 conditioning floor). Pass `--emit` to print fresh Rust-pasteable literals when adding or changing a golden. Needs the `dev`/`test` extras (`uv sync --extra dev`).
 
 ## Reporting py_vollib drift
 
