@@ -175,6 +175,32 @@ jobs:
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - run: cargo check --workspace --all-targets
 
+  test-numpy-floor:
+    name: test (numpy floor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.12"
+      - name: Build, then pin numpy down to the declared floor
+        # Proves the numpy>=1.26 floor in pyproject actually works: the lockfile
+        # resolves numpy 2.x, so after building we force numpy to the floor and
+        # run the suite against it. The abi3 wheel is numpy-version-agnostic at
+        # runtime (rust-numpy binds the C-API of whichever numpy is imported), so
+        # building under 2.x then testing under 1.26 is a valid floor check. The
+        # version assert stops a silent no-op downgrade from testing 2.x by stealth.
+        run: |
+          uv sync --locked --extra test --extra dev --no-install-project
+          uv run --no-sync maturin develop --release
+          uv pip install "numpy==1.26.*"
+          uv run --no-sync python -c "import numpy; assert numpy.__version__.startswith('1.26'), numpy.__version__; print('numpy floor:', numpy.__version__)"
+      - name: Run pytest
+        run: uv run --no-sync pytest -ra
+
   ci-passed:
     # Single check that branch protection can require, instead of listing each
     # matrix entry by name. Succeeds only if all needed jobs succeeded; fails
@@ -182,7 +208,7 @@ jobs:
     # `if: always()` is set.
     name: ci-passed
     if: ${{ always() }}
-    needs: [lint, test-rust, test-python, property-tests, msrv]
+    needs: [lint, test-rust, test-python, property-tests, msrv, test-numpy-floor]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
