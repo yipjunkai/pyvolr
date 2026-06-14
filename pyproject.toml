@@ -38,7 +38,10 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Mathematics",
   "Typing :: Typed",
 ]
-dependencies = ["numpy>=2.0"]
+# numpy floor is 1.26 (the last 1.x line; covers py3.9-3.12). rust-numpy binds
+# numpy's C-API at runtime, so the single abi3 wheel serves 1.26 through 2.x from
+# one build — the `test-numpy-floor` CI job proves the floor imports and passes.
+dependencies = ["numpy>=1.26"]
 dynamic = ["version"]
 
 [project.urls]
