@@ -157,12 +157,7 @@ GOLDENS: list[tuple[str, float, Callable[..., mp.mpf], list[tuple[str, tuple, fl
     ),
     (
         "iv.rs::call_matches_mpmath_goldens (normalised_black::call)",
-        # 2e-14, not 1e-14: at the deepest-OTM point (r1_deeper, x=-1.5 s=0.1,
-        # b ~ 2.4e-53) the f64 golden is at its conditioning floor — it sits
-        # ~1.26e-14 from 60-digit truth. This check verifies golden ACCURACY
-        # (golden vs mpmath truth), which is distinct from the Rust test's
-        # 1e-14 impl-vs-golden assert. Drift beyond 2e-14 is a real regression.
-        2e-14,
+        1e-14,
         nb_call,
         [
             ("r4_moderate_otm", (-0.1, 0.2), 3.9458602641807e-2),
@@ -173,7 +168,7 @@ GOLDENS: list[tuple[str, float, Callable[..., mp.mpf], list[tuple[str, tuple, fl
             ("r2_small_t_atm", (0.0, 0.02), 7.978712629263208e-3),
             ("r2_small_t_otm", (-0.0953101798043248, 0.02), 3.663393972840609e-9),
             ("r1_deep_asymp", (-1.1, 0.1), 1.7072701604888685e-30),
-            ("r1_deeper", (-1.5, 0.1), 2.4230205703911934e-53),
+            ("r1_deeper", (-1.5, 0.1), 2.423020570391163e-53),
             ("itm_call", (0.5, 0.2), 5.056237971192526e-1),
             ("itm_call_high_vol", (1.0, 0.5), 1.0463329697381733),
         ],
