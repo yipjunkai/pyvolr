@@ -41,7 +41,7 @@ jobs:
       - name: Export locked test deps for in-wheel verification
         run: uv export --locked --extra test --no-emit-project --output-file requirements-wheel-test.txt
       - name: Build + test the abi3 + free-threaded wheels with cibuildwheel
-        uses: pypa/cibuildwheel@f03ac7617d6cff873ccf24cc0d567ef5ba5a9e6d # v4.0.0
+        uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55 # v4.1.0
         env:
           # Two build IDs: the abi3 wheel that serves every GIL CPython >= 3.10,
           # plus one free-threaded build. The t-selector keeps the smoke covering
