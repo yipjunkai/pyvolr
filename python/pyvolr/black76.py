@@ -41,7 +41,9 @@ from pyvolr._wrappers import (
     Formatted,
     Greeks,
     GreeksResult,
+    OnError,
     ReturnAs,
+    apply_on_error,
     broadcast_f64,
     format_result,
     normalize_flag,
@@ -394,6 +396,7 @@ def implied_vol(
     r: ArrayLike,
     *,
     return_as: Literal["numpy"] | None = ...,
+    on_error: OnError = ...,
 ) -> _Result: ...
 @overload
 def implied_vol(
@@ -405,6 +408,7 @@ def implied_vol(
     r: ArrayLike,
     *,
     return_as: Literal["dict"],
+    on_error: OnError = ...,
 ) -> dict[str, _Result]: ...
 @overload
 def implied_vol(
@@ -416,6 +420,7 @@ def implied_vol(
     r: ArrayLike,
     *,
     return_as: Literal["dataframe"],
+    on_error: OnError = ...,
 ) -> pd.DataFrame: ...
 def implied_vol(
     price: ArrayLike,
@@ -426,11 +431,14 @@ def implied_vol(
     r: ArrayLike,
     *,
     return_as: ReturnAs = None,
+    on_error: OnError = "warn",
 ) -> Formatted:
     """Solve for implied volatility given a market price.
 
     ``return_as``: ``"numpy"`` (default), ``"dict"`` (``{"iv": ...}``), or
-    ``"dataframe"`` (needs pandas).
+    ``"dataframe"`` (needs pandas). ``on_error`` controls unsolvable inputs (see
+    "Produces NaN" below): ``"warn"`` (default) emits an ``ImpliedVolWarning``,
+    ``"raise"`` raises ``ImpliedVolError``, ``"ignore"`` returns NaN silently.
 
     Uses the Jäckel "Let's Be Rational" algorithm (routes through
     ``iv::solve`` with ``q = r``). Converges to ~1e-13 precision in at
@@ -456,7 +464,7 @@ def implied_vol(
        strikes where ``|F/K|`` is far from 1 *and* ``T`` is small. See
        the ``pyvolr.bs.implied_vol`` docstring for more detail.
 
-    Returns NaN where:
+    Produces NaN (subject to ``on_error``) where:
       - the target price is outside the no-arbitrage bounds for the forward,
       - `T <= 0`, `F <= 0`, or `K <= 0`,
       - any input is non-finite.
@@ -465,6 +473,7 @@ def implied_vol(
     flag_arr = normalize_flag(flag, shape).ravel()
     p_arr, f_arr, k_arr, t_arr, r_arr = flat
     out = _core.black76_iv(p_arr, flag_arr, f_arr, k_arr, t_arr, r_arr)
+    apply_on_error(out, on_error)
     return format_result({"iv": out}, shape, return_as)
 
 

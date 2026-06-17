@@ -12,10 +12,13 @@ should depend on `pyvolr.bs` / `pyvolr.black76`, not on the helpers here.
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+
+from pyvolr.exceptions import ImpliedVolError, ImpliedVolWarning
 
 if TYPE_CHECKING:
     from typing import Literal, TypeAlias
@@ -27,8 +30,10 @@ __all__ = [
     "Formatted",
     "Greeks",
     "GreeksResult",
+    "OnError",
     "Result",
     "ReturnAs",
+    "apply_on_error",
     "broadcast_f64",
     "format_result",
     "normalize_flag",
@@ -45,6 +50,9 @@ Result = float | NDArray[np.float64]
 ReturnAs: TypeAlias = "Literal['numpy', 'dict', 'dataframe'] | None"
 Formatted: TypeAlias = "Result | dict[str, Result] | pd.DataFrame"
 GreeksResult: TypeAlias = "Greeks | pd.DataFrame"
+
+# `on_error` governs how `implied_vol` reacts to an unsolvable input (NaN result).
+OnError: TypeAlias = "Literal['warn', 'raise', 'ignore']"
 
 
 class Greeks(TypedDict):
@@ -158,3 +166,38 @@ def _to_dataframe(columns: dict[str, NDArray[np.float64]]) -> pd.DataFrame:
             "Install it with `pip install pandas`, or use return_as='numpy' or 'dict'."
         ) from exc
     return pd.DataFrame({name: np.reshape(col, -1) for name, col in columns.items()})
+
+
+def apply_on_error(out: NDArray[np.float64], on_error: str) -> None:
+    """React to NaN failures in a flat implied-vol result per ``on_error``.
+
+    A failed solve (price outside the no-arbitrage bounds, non-positive
+    ``T``/``S``/``K``, or non-finite input) is returned by the Rust core as
+    ``NaN``; a solvable implied vol is always finite, so ``NaN`` uniquely marks a
+    failure. ``"ignore"`` returns silently (today's behaviour), ``"warn"`` emits a
+    single ``ImpliedVolWarning`` summarising the failures, and ``"raise"`` raises
+    ``ImpliedVolError`` if any element failed. Any other value raises
+    ``ValueError`` (mirrors ``format_result``).
+
+    Call on the raw result before ``format_result``. The ``"ignore"`` fast path
+    skips the NaN scan entirely, so opted-out callers pay nothing.
+    """
+    if on_error == "ignore":
+        return
+    if on_error not in ("warn", "raise"):
+        raise ValueError(f"on_error must be 'warn', 'raise', or 'ignore', got {on_error!r}")
+    mask = np.isnan(out)
+    n_failed = int(mask.sum())
+    if n_failed == 0:
+        return
+    reason = "price outside the no-arbitrage bounds, non-positive T/S/K, or non-finite input"
+    total = out.size
+    if total == 1:
+        msg = f"implied-vol solve returned NaN: {reason}."
+    else:
+        first = int(np.argmax(mask))
+        msg = f"{n_failed} of {total} implied-vol solves returned NaN (first at index {first}): {reason}."
+    if on_error == "raise":
+        raise ImpliedVolError(msg)
+    # stacklevel=3: warnings.warn -> apply_on_error -> implied_vol -> user call site.
+    warnings.warn(msg, ImpliedVolWarning, stacklevel=3)

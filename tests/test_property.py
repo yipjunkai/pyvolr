@@ -113,7 +113,7 @@ class TestIvRoundtrip:
     ) -> None:
         p = bs.price(fl, S=s, K=k, T=t, r=r, sigma=sigma, q=q)
         assume(p > 1e-6)
-        iv = bs.implied_vol(p, fl, S=s, K=k, T=t, r=r, q=q)
+        iv = bs.implied_vol(p, fl, S=s, K=k, T=t, r=r, q=q, on_error="ignore")
         assume(not np.isnan(iv))
         p_recovered = bs.price(fl, S=s, K=k, T=t, r=r, sigma=iv, q=q)
         # LBR converges to f64 precision in IV space; round-trip price drift
@@ -138,7 +138,7 @@ class TestIvRoundtrip:
         p = bs.price(fl, S=s, K=k, T=t, r=r, sigma=sigma, q=q)
         v = bs.vega(S=s, K=k, T=t, r=r, sigma=sigma, q=q)
         assume(v > 1e-4 * max(1.0, s))  # filter ill-conditioned tails
-        iv = bs.implied_vol(p, fl, S=s, K=k, T=t, r=r, q=q)
+        iv = bs.implied_vol(p, fl, S=s, K=k, T=t, r=r, q=q, on_error="ignore")
         assume(not np.isnan(iv))
         # LBR converges to ~1e-13 IV precision at moderate moneyness, but
         # hypothesis's thorough profile finds deeper-ITM/OTM + high-vol corners
@@ -230,7 +230,7 @@ class TestBlack76IvRoundtrip:
         p = black76.price(fl, F=f, K=k, T=t, r=r, sigma=sigma)
         v = black76.vega(F=f, K=k, T=t, r=r, sigma=sigma)
         assume(v > 1e-4 * max(1.0, f))
-        iv = black76.implied_vol(p, fl, F=f, K=k, T=t, r=r)
+        iv = black76.implied_vol(p, fl, F=f, K=k, T=t, r=r, on_error="ignore")
         assume(not np.isnan(iv))
         # See `TestIvRoundtrip.test_iv_recovers_sigma_when_well_conditioned`
         # for the rationale on the 1e-10 bound under hypothesis's thorough profile.

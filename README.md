@@ -233,6 +233,8 @@ pyvolr/
 
 Every function also accepts a keyword-only `return_as`: `"numpy"` (default — array, or scalar for scalar input), `"dict"` (`{name: value}`), or `"dataframe"` (a pandas DataFrame; `pandas` is an optional dependency, installed only if you use this mode).
 
+`implied_vol` additionally accepts a keyword-only `on_error` for unsolvable inputs (price outside the no-arbitrage bounds, non-positive `T`/`S`/`K`, or non-finite input): `"warn"` (default — emit an `ImpliedVolWarning` and return NaN), `"raise"` (raise `ImpliedVolError`), or `"ignore"` (return NaN silently).
+
 ## 🛡️ Sustainability
 
 `py_vollib` died because nobody was paid to maintain it. pyvolr is engineered to outlive its maintainer:

@@ -21,7 +21,8 @@ def implied_volatility(price: float, S: float, K: float, t: float, r: float, fla
     price has no real implied vol. The modern `pyvolr.bs.implied_vol` returns
     NaN instead.
     """
-    sigma = float(_bs.implied_vol(price, flag, S, K, t, r))
+    # on_error="ignore": the shim does its own out-of-bounds handling below.
+    sigma = float(_bs.implied_vol(price, flag, S, K, t, r, on_error="ignore"))
     if math.isnan(sigma):
         # black_scholes: q = 0, so the discounted underlying is S itself.
         raise_for_iv_price(price, S, K * math.exp(-r * t), flag)
