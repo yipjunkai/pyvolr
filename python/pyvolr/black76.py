@@ -18,27 +18,42 @@ Conventions (same as `pyvolr.bs`):
     - `rho` is per unit of r.
 
 Put-call parity for Black-76: `C - P = exp(-r*T) * (F - K)`.
+
+Output container:
+    Every function takes a keyword-only ``return_as``. ``None``/``"numpy"``
+    (default) returns a numpy array, or a scalar when all inputs are scalar;
+    ``"dict"`` returns ``{name: value}``; ``"dataframe"`` returns a pandas
+    DataFrame (pandas is an optional dependency — ``pip install pandas`` to use
+    this mode; otherwise it raises ``ModuleNotFoundError``). ``greeks`` returns
+    a ``Greeks`` dict for ``None``/``"numpy"``/``"dict"`` and a five-column
+    DataFrame for ``"dataframe"``.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast, overload
 
 from pyvolr import _core
 from pyvolr._wrappers import (
     FlagInput as _FlagInput,
 )
 from pyvolr._wrappers import (
+    Formatted,
     Greeks,
+    GreeksResult,
+    ReturnAs,
     broadcast_f64,
+    format_result,
     normalize_flag,
-    scalar_or_array,
 )
 from pyvolr._wrappers import (
     Result as _Result,
 )
 
 if TYPE_CHECKING:
+    from typing import Literal
+
+    import pandas as pd
     from numpy.typing import ArrayLike
 
 __all__ = [
@@ -54,6 +69,7 @@ __all__ = [
 ]
 
 
+@overload
 def price(
     flag: _FlagInput,
     F: ArrayLike,
@@ -61,14 +77,52 @@ def price(
     T: ArrayLike,
     r: ArrayLike,
     sigma: ArrayLike,
-) -> _Result:
-    """European Black-76 option price on a futures/forward `F`."""
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def price(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def price(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def price(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """European Black-76 option price on a futures/forward `F`.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.black76_price(flag_arr, *flat)
-    return scalar_or_array(out, shape)
+    return format_result({"price": out}, shape, return_as)
 
 
+@overload
 def delta(
     flag: _FlagInput,
     F: ArrayLike,
@@ -76,40 +130,148 @@ def delta(
     T: ArrayLike,
     r: ArrayLike,
     sigma: ArrayLike,
-) -> _Result:
-    """First derivative of price with respect to the forward."""
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def delta(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def delta(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def delta(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """First derivative of price with respect to the forward.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.black76_delta(flag_arr, *flat)
-    return scalar_or_array(out, shape)
+    return format_result({"delta": out}, shape, return_as)
 
 
+@overload
 def gamma(
     F: ArrayLike,
     K: ArrayLike,
     T: ArrayLike,
     r: ArrayLike,
     sigma: ArrayLike,
-) -> _Result:
-    """Second derivative of price with respect to the forward. Independent of call/put."""
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def gamma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def gamma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def gamma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """Second derivative of price with respect to the forward. Independent of call/put.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     out = _core.black76_gamma(*flat)
-    return scalar_or_array(out, shape)
+    return format_result({"gamma": out}, shape, return_as)
 
 
+@overload
 def vega(
     F: ArrayLike,
     K: ArrayLike,
     T: ArrayLike,
     r: ArrayLike,
     sigma: ArrayLike,
-) -> _Result:
-    """Derivative of price with respect to volatility, per unit vol."""
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def vega(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def vega(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def vega(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """Derivative of price with respect to volatility, per unit vol.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     out = _core.black76_vega(*flat)
-    return scalar_or_array(out, shape)
+    return format_result({"vega": out}, shape, return_as)
 
 
+@overload
 def theta(
     flag: _FlagInput,
     F: ArrayLike,
@@ -117,18 +279,55 @@ def theta(
     T: ArrayLike,
     r: ArrayLike,
     sigma: ArrayLike,
-) -> _Result:
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def theta(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def theta(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def theta(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
     """Calendar theta, per year: minus the derivative of price w.r.t. time-to-expiry.
 
     Typically negative for long calls and puts (value decays as the clock
     advances). Divide by 365 for the per-day convention.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
     """
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.black76_theta(flag_arr, *flat)
-    return scalar_or_array(out, shape)
+    return format_result({"theta": out}, shape, return_as)
 
 
+@overload
 def rho(
     flag: _FlagInput,
     F: ArrayLike,
@@ -136,19 +335,56 @@ def rho(
     T: ArrayLike,
     r: ArrayLike,
     sigma: ArrayLike,
-) -> _Result:
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def rho(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def rho(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def rho(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
     """Derivative of price with respect to the risk-free rate, per unit `r`.
 
     In Black-76 the forward is exogenous (doesn't depend on `r`), so the only
     `r`-dependent piece is the discount factor `exp(-r*T)`. Therefore
     `rho = -T * price` for both calls and puts — quite different from BSM rho.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
     """
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.black76_rho(flag_arr, *flat)
-    return scalar_or_array(out, shape)
+    return format_result({"rho": out}, shape, return_as)
 
 
+@overload
 def implied_vol(
     price: ArrayLike,
     flag: _FlagInput,
@@ -156,8 +392,45 @@ def implied_vol(
     K: ArrayLike,
     T: ArrayLike,
     r: ArrayLike,
-) -> _Result:
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def implied_vol(
+    price: ArrayLike,
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def implied_vol(
+    price: ArrayLike,
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def implied_vol(
+    price: ArrayLike,
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
     """Solve for implied volatility given a market price.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"`` (``{"iv": ...}``), or
+    ``"dataframe"`` (needs pandas).
 
     Uses the Jäckel "Let's Be Rational" algorithm (routes through
     ``iv::solve`` with ``q = r``). Converges to ~1e-13 precision in at
@@ -192,9 +465,10 @@ def implied_vol(
     flag_arr = normalize_flag(flag, shape).ravel()
     p_arr, f_arr, k_arr, t_arr, r_arr = flat
     out = _core.black76_iv(p_arr, flag_arr, f_arr, k_arr, t_arr, r_arr)
-    return scalar_or_array(out, shape)
+    return format_result({"iv": out}, shape, return_as)
 
 
+@overload
 def greeks(
     flag: _FlagInput,
     F: ArrayLike,
@@ -202,8 +476,35 @@ def greeks(
     T: ArrayLike,
     r: ArrayLike,
     sigma: ArrayLike,
-) -> Greeks:
-    """Compute the standard five Greeks at once. Returns a `Greeks` typed dict.
+    *,
+    return_as: Literal["numpy", "dict"] | None = ...,
+) -> Greeks: ...
+@overload
+def greeks(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def greeks(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> GreeksResult:
+    """Compute the standard five Greeks at once.
+
+    Returns a ``Greeks`` typed dict for ``return_as`` ``None``/``"numpy"``/
+    ``"dict"`` (the default), or a five-column DataFrame for ``"dataframe"``
+    (columns ``delta, gamma, theta, vega, rho``; needs pandas).
 
     Single FFI call into a shared Rust kernel — see `pyvolr.bs.greeks` for
     the rationale. Batches of ~4000 rows or more parallelise on rayon's
@@ -215,10 +516,5 @@ def greeks(
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     d, g, v, th, rh = _core.black76_greeks(flag_arr, *flat)
-    return {
-        "delta": scalar_or_array(d, shape),
-        "gamma": scalar_or_array(g, shape),
-        "theta": scalar_or_array(th, shape),
-        "vega": scalar_or_array(v, shape),
-        "rho": scalar_or_array(rh, shape),
-    }
+    cols = {"delta": d, "gamma": g, "theta": th, "vega": v, "rho": rh}
+    return cast("GreeksResult", format_result(cols, shape, return_as))

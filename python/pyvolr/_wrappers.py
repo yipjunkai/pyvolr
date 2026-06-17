@@ -12,22 +12,39 @@ should depend on `pyvolr.bs` / `pyvolr.black76`, not on the helpers here.
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+if TYPE_CHECKING:
+    from typing import Literal, TypeAlias
+
+    import pandas as pd
+
 __all__ = [
     "FlagInput",
+    "Formatted",
     "Greeks",
+    "GreeksResult",
     "Result",
+    "ReturnAs",
     "broadcast_f64",
+    "format_result",
     "normalize_flag",
     "scalar_or_array",
 ]
 
 FlagInput = ArrayLike | str
 Result = float | NDArray[np.float64]
+
+# `return_as` selects the output container shared by every public pricing
+# function. These are string forward-ref aliases so the `pd.DataFrame` member
+# stays type-check-only — pandas is never imported at runtime unless a caller
+# actually asks for `return_as="dataframe"`.
+ReturnAs: TypeAlias = "Literal['numpy', 'dict', 'dataframe'] | None"
+Formatted: TypeAlias = "Result | dict[str, Result] | pd.DataFrame"
+GreeksResult: TypeAlias = "Greeks | pd.DataFrame"
 
 
 class Greeks(TypedDict):
@@ -90,3 +107,54 @@ def scalar_or_array(arr: NDArray[np.float64], shape: tuple[int, ...]) -> Result:
     if shape == ():
         return float(arr[0])
     return np.reshape(arr, shape)
+
+
+def format_result(
+    columns: dict[str, NDArray[np.float64]],
+    shape: tuple[int, ...],
+    return_as: str | None,
+) -> Formatted:
+    """Shape flat Rust outputs into the container requested by ``return_as``.
+
+    ``columns`` maps each output name to its flat 1-D result array (length N).
+    The scalar-collapse rule (``scalar_or_array``) applies to every mode except
+    ``"dataframe"``, which is inherently tabular (scalar input -> one row):
+
+      - ``None`` / ``"numpy"``: a bare ``Result`` for a single column, otherwise
+        a ``dict`` of arrays (a multi-output result has no bare numpy form).
+      - ``"dict"``: always a ``{name: Result}`` dict.
+      - ``"dataframe"``: a pandas ``DataFrame`` (pandas is an optional
+        dependency; see ``_to_dataframe``). Multi-dimensional broadcasts are
+        raveled in C order.
+
+    Raises ``ValueError`` for any other ``return_as`` value. The parameter is
+    typed ``str | None`` (not the narrower ``ReturnAs``) so this runtime guard
+    stays reachable for callers that bypass the type checker.
+    """
+    if return_as in (None, "numpy"):
+        if len(columns) == 1:
+            (out,) = columns.values()
+            return scalar_or_array(out, shape)
+        return {name: scalar_or_array(col, shape) for name, col in columns.items()}
+    if return_as == "dict":
+        return {name: scalar_or_array(col, shape) for name, col in columns.items()}
+    if return_as == "dataframe":
+        return _to_dataframe(columns)
+    raise ValueError(f"return_as must be 'numpy', 'dict', or 'dataframe', got {return_as!r}")
+
+
+def _to_dataframe(columns: dict[str, NDArray[np.float64]]) -> pd.DataFrame:
+    """Build a DataFrame from flat result columns. pandas is a soft dependency.
+
+    Caught as ``ImportError`` (not ``ModuleNotFoundError``) so the case where a
+    test stubs ``sys.modules["pandas"] = None`` is handled alongside a genuine
+    missing install; both surface the same actionable ``ModuleNotFoundError``.
+    """
+    try:
+        import pandas as pd
+    except ImportError as exc:
+        raise ModuleNotFoundError(
+            "return_as='dataframe' requires pandas, which is not installed. "
+            "Install it with `pip install pandas`, or use return_as='numpy' or 'dict'."
+        ) from exc
+    return pd.DataFrame({name: np.reshape(col, -1) for name, col in columns.items()})

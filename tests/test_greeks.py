@@ -2,12 +2,28 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, TypedDict
 
 import numpy as np
 import pytest
 
 from pyvolr import bs
+
+
+class _GreekParams(TypedDict):
+    """Precise keys so ``**PARAMS`` splat matches the typed function overloads.
+
+    A plain ``dict[str, float]`` lets the type checker assume an arbitrary key
+    (e.g. ``return_as``) might be present, which no longer unifies with the
+    keyword-only ``return_as`` parameter.
+    """
+
+    S: float
+    K: float
+    T: float
+    r: float
+    sigma: float
+    q: float
 
 
 def _central_fd(f, x: float, h: float) -> float:
@@ -17,7 +33,7 @@ def _central_fd(f, x: float, h: float) -> float:
 class TestGreeksVsFiniteDifference:
     """Each analytical Greek must match a central-difference numerical estimate."""
 
-    PARAMS: ClassVar[dict[str, float]] = {
+    PARAMS: ClassVar[_GreekParams] = {
         "S": 100.0,
         "K": 105.0,
         "T": 0.5,
@@ -45,7 +61,7 @@ class TestGreeksVsFiniteDifference:
         assert analytical == pytest.approx(fd, abs=1e-6)
 
     def test_gamma(self) -> None:
-        analytical = bs.gamma(**{k: v for k, v in self.PARAMS.items()})
+        analytical = bs.gamma(**self.PARAMS)
         h = 0.01
         f0 = bs.price(
             "c",

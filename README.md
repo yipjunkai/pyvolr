@@ -231,6 +231,8 @@ pyvolr/
 
 `flag` accepts `'c'`/`'C'` (call), `'p'`/`'P'` (put), or an array thereof.
 
+Every function also accepts a keyword-only `return_as`: `"numpy"` (default — array, or scalar for scalar input), `"dict"` (`{name: value}`), or `"dataframe"` (a pandas DataFrame; `pandas` is an optional dependency, installed only if you use this mode).
+
 ## 🛡️ Sustainability
 
 `py_vollib` died because nobody was paid to maintain it. pyvolr is engineered to outlive its maintainer:
