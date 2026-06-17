@@ -51,7 +51,11 @@ Issues = "https://github.com/yipjunkai/pyvolr/issues"
 Changelog = "https://github.com/yipjunkai/pyvolr/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-test = ["pytest>=9.0", "pytest-benchmark>=5.0", "hypothesis>=6.150"]
+# pandas is a SOFT dependency: only needed for `return_as="dataframe"`, never
+# imported at runtime otherwise. It lives in the test extra (not [project]
+# dependencies) so we can type-check + test the dataframe path; the dataframe
+# tests `importorskip("pandas")`, so any leg without it simply skips them.
+test = ["pytest>=9.0", "pytest-benchmark>=5.0", "hypothesis>=6.150", "pandas>=2.2"]
 dev = ["maturin>=1.13", "ruff>=0.15", "pyright>=1.1.400", "pre-commit>=4.0"]
 
 # CI-only tooling (PEP 735 groups -- not package extras, never ships in
