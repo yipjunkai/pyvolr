@@ -62,6 +62,10 @@ test = [
   "pandas>=2.2",
 ]
 dev = ["maturin>=1.13", "ruff>=0.15", "pyright>=1.1.400", "pre-commit>=4.0"]
+# User-facing extra enabling the py_vollib_vectorized shim's DataFrame/Series
+# output: `pip install pyvolr[pandas]`. (pandas is also in `test` above so CI
+# always exercises the dataframe paths.)
+pandas = ["pandas>=2.2"]
 
 # CI-only tooling (PEP 735 groups -- not package extras, never ships in
 # metadata). Declared here so the exact version lives in uv.lock and
