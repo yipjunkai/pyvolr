@@ -177,12 +177,16 @@ class TestImpliedVol:
 
     def test_below_no_arb_returns_nan(self) -> None:
         # No-arb lower bound for call: exp(-rT) * max(F-K, 0).
-        iv = black76.implied_vol(price=-1.0, flag="c", F=100, K=100, T=1.0, r=0.05)
+        iv = black76.implied_vol(
+            price=-1.0, flag="c", F=100, K=100, T=1.0, r=0.05, on_error="ignore"
+        )
         assert np.isnan(iv)
 
     def test_above_no_arb_returns_nan(self) -> None:
         # Upper bound for call: exp(-rT) * F.
-        iv = black76.implied_vol(price=1e6, flag="c", F=100, K=100, T=1.0, r=0.05)
+        iv = black76.implied_vol(
+            price=1e6, flag="c", F=100, K=100, T=1.0, r=0.05, on_error="ignore"
+        )
         assert np.isnan(iv)
 
 

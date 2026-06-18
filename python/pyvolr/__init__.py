@@ -18,10 +18,11 @@ from importlib.metadata import version as _pkg_version
 
 from pyvolr import black76 as black76
 from pyvolr import bs as bs
+from pyvolr.exceptions import ImpliedVolError, ImpliedVolWarning
 
 try:
     __version__ = _pkg_version("pyvolr")
 except PackageNotFoundError:
     __version__ = "0.0.0+local"
 
-__all__ = ["__version__", "black76", "bs"]
+__all__ = ["ImpliedVolError", "ImpliedVolWarning", "__version__", "black76", "bs"]

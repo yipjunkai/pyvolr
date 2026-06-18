@@ -41,7 +41,9 @@ from pyvolr._wrappers import (
     Formatted,
     Greeks,
     GreeksResult,
+    OnError,
     ReturnAs,
+    apply_on_error,
     broadcast_f64,
     format_result,
     normalize_flag,
@@ -415,6 +417,7 @@ def implied_vol(
     q: ArrayLike = ...,
     *,
     return_as: Literal["numpy"] | None = ...,
+    on_error: OnError = ...,
 ) -> _Result: ...
 @overload
 def implied_vol(
@@ -427,6 +430,7 @@ def implied_vol(
     q: ArrayLike = ...,
     *,
     return_as: Literal["dict"],
+    on_error: OnError = ...,
 ) -> dict[str, _Result]: ...
 @overload
 def implied_vol(
@@ -439,6 +443,7 @@ def implied_vol(
     q: ArrayLike = ...,
     *,
     return_as: Literal["dataframe"],
+    on_error: OnError = ...,
 ) -> pd.DataFrame: ...
 def implied_vol(
     price: ArrayLike,
@@ -450,11 +455,14 @@ def implied_vol(
     q: ArrayLike = 0.0,
     *,
     return_as: ReturnAs = None,
+    on_error: OnError = "warn",
 ) -> Formatted:
     """Solve for implied volatility given a market price.
 
     ``return_as``: ``"numpy"`` (default), ``"dict"`` (``{"iv": ...}``), or
-    ``"dataframe"`` (needs pandas).
+    ``"dataframe"`` (needs pandas). ``on_error`` controls unsolvable inputs (see
+    "Produces NaN" below): ``"warn"`` (default) emits an ``ImpliedVolWarning``,
+    ``"raise"`` raises ``ImpliedVolError``, ``"ignore"`` returns NaN silently.
 
     Uses the Jäckel "Let's Be Rational" algorithm: converges to ~1e-13
     precision in at most two Householder iterations across the full
@@ -484,7 +492,7 @@ def implied_vol(
        the result through ``bs.price`` to verify; a mismatch in sigma with a
        matching price is the ill-conditioning signature.
 
-    Returns NaN where:
+    Produces NaN (subject to ``on_error``) where:
       - the target price is outside the no-arbitrage bounds,
       - `T <= 0`, `S <= 0`, or `K <= 0`,
       - any input is non-finite.
@@ -493,6 +501,7 @@ def implied_vol(
     flag_arr = normalize_flag(flag, shape).ravel()
     p_arr, s_arr, k_arr, t_arr, r_arr, q_arr = flat
     out = _core.bsm_iv(p_arr, flag_arr, s_arr, k_arr, t_arr, r_arr, q_arr)
+    apply_on_error(out, on_error)
     return format_result({"iv": out}, shape, return_as)
 
 

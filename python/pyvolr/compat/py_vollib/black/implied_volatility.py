@@ -25,7 +25,8 @@ def implied_volatility(price: float, F: float, K: float, r: float, t: float, fla
     contract (from `pyvolr.compat.py_vollib.exceptions`) on out-of-bounds
     prices; the modern `pyvolr.black76.implied_vol` returns NaN instead.
     """
-    sigma = float(_b76.implied_vol(price, flag, F, K, t, r))
+    # on_error="ignore": the shim does its own out-of-bounds handling below.
+    sigma = float(_b76.implied_vol(price, flag, F, K, t, r, on_error="ignore"))
     if math.isnan(sigma):
         # Black-76: underlying is the forward F, discounted at r (q = r).
         disc_r = math.exp(-r * t)
