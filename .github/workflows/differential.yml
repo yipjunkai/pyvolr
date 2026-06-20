@@ -1,14 +1,19 @@
 name: differential
 
-# Compares pyvolr's compat shim to the reference py_vollib across a grid of
-# inputs — the gate behind the "matches py_vollib" claim. Invoked as a release
-# gate (release.yml calls it via workflow_call before publishing wheels) and on
-# demand (workflow_dispatch). py_vollib doesn't import on Python 3.12+ (the
-# _testcapi bug — see docs/why.md), so this runs on a 3.10 sidecar.
+# Compares pyvolr's compat shims to their references across a grid of inputs —
+# the gate behind the "matches py_vollib" and "matches py_vollib_vectorized"
+# claims. Invoked as a release gate (release.yml calls it via workflow_call
+# before publishing wheels) and on demand (workflow_dispatch). Neither reference
+# imports on Python 3.12+ (the _testcapi bug — see docs/why.md;
+# py_vollib_vectorized depends on py_vollib), so this runs on a 3.10 sidecar.
 #
-# No schedule: pyvolr's outputs only move on our own commits and py_vollib is
-# abandoned (frozen), so a nightly run just recomputed an identical result. The
-# signal that matters — "are we about to publish something that no longer
+# The two differentials run in SEPARATE pytest processes: importing
+# py_vollib_vectorized monkeypatches py_vollib module-globally, which must not
+# leak into the py_vollib differential.
+#
+# No schedule: pyvolr's outputs only move on our own commits and both references
+# are abandoned (frozen), so a nightly run just recomputed an identical result.
+# The signal that matters — "are we about to publish something that no longer
 # matches?" — is the release gate, not the clock.
 
 on:
@@ -24,7 +29,7 @@ concurrency:
 
 jobs:
   differential:
-    name: differential vs py_vollib
+    name: differential vs py_vollib + py_vollib_vectorized
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -37,7 +42,7 @@ jobs:
       - name: Build pyvolr and install test deps
         run: |
           uv venv
-          uv pip install maturin pytest hypothesis numpy py_vollib
+          uv pip install maturin pytest hypothesis numpy py_vollib py_vollib_vectorized
           uv run maturin develop --release
       - name: Patch py_lets_be_rational for missing _testcapi
         # uv-managed Pythons (and many production Python distributions) don't
@@ -51,5 +56,11 @@ jobs:
           test -n "$CONST" || { echo "py_lets_be_rational/constants.py not found"; exit 1; }
           sed -i 's|from _testcapi import DBL_MIN, DBL_MAX|from sys import float_info as _fi; DBL_MIN, DBL_MAX = _fi.min, _fi.max|' "$CONST"
           grep -q "float_info" "$CONST" || { echo "patch did not apply"; exit 1; }
-      - name: Run differential tests
-        run: uv run pytest -m differential -ra
+      - name: Run differential (py_vollib)
+        # Runs everything marked `differential` EXCEPT the py_vollib_vectorized
+        # file, which must run in its own process (see below).
+        run: uv run pytest -m differential --ignore=tests/test_differential_vectorized.py -ra
+      - name: Run differential (py_vollib_vectorized)
+        # Separate process: importing py_vollib_vectorized monkeypatches py_vollib
+        # module-globally, which must not leak into the py_vollib differential.
+        run: uv run pytest tests/test_differential_vectorized.py -ra
