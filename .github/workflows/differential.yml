@@ -5,9 +5,11 @@ name: differential
 # claims. Invoked as a release gate (release.yml calls it via workflow_call
 # before publishing wheels) and on demand (workflow_dispatch). Neither reference
 # imports on Python 3.12+ (the _testcapi bug — see docs/why.md;
-# py_vollib_vectorized depends on py_vollib), so this runs on a 3.11 sidecar —
-# the newest version that still works, and py_vollib_vectorized's numba JIT needs
-# numpy>=2.3 (type-inference breaks on the 2.2.x that's the ceiling on 3.10).
+# py_vollib_vectorized depends on py_vollib), so this runs on a 3.11 sidecar (the
+# newest version where both still import). py_vollib_vectorized's recursive numba
+# kernels fail to compile under modern numba, so its differential runs with
+# NUMBA_DISABLE_JIT=1 — pure-Python mode, identical values, immune to the
+# numba/numpy combo.
 #
 # The two differentials run in SEPARATE pytest processes: importing
 # py_vollib_vectorized monkeypatches py_vollib module-globally, which must not
@@ -65,4 +67,8 @@ jobs:
       - name: Run differential (py_vollib_vectorized)
         # Separate process: importing py_vollib_vectorized monkeypatches py_vollib
         # module-globally, which must not leak into the py_vollib differential.
+        # NUMBA_DISABLE_JIT: pvv 0.1.x's recursive @njit kernels fail type
+        # inference under modern numba; pure-Python mode gives identical values.
+        env:
+          NUMBA_DISABLE_JIT: "1"
         run: uv run pytest tests/test_differential_vectorized.py -ra
