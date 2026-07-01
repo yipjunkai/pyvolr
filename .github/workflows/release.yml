@@ -88,7 +88,14 @@ jobs:
           # via Apple's cross-build SDK, but the resulting binary can't be exec'd
           # on the arm64 runner to run pytest. Skip testing x86_64 macOS wheels
           # only; Linux/Windows are native-arch and tests run normally.
-          CIBW_TEST_SKIP: "*-macosx_x86_64"
+          #
+          # *-win32: the in-wheel test installs the `test` extra, which since
+          # 0.1.5 includes pandas (soft dep for return_as="dataframe"). pandas
+          # ships no 32-bit Windows wheel, so the test-deps install can't resolve
+          # there (pip source-builds it and fails on the missing Python.h). The
+          # win32 wheel still builds + passes abi3audit and is core-functional
+          # (numpy has win32 wheels); only its in-wheel pytest is skipped.
+          CIBW_TEST_SKIP: "*-macosx_x86_64 *-win32"
           # MACOSX_DEPLOYMENT_TARGET: cibuildwheel's default of 10.9 conflicts
           # with rustc's minimum of 10.12 — built binaries target 10.12+ but
           # delocate then rejects the wheel because the manifest says 10.9.
