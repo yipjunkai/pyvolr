@@ -23,8 +23,8 @@ crate-type = ["cdylib", "rlib"]
 # symbols at runtime (correct for wheel builds, broken for `cargo test`).
 # Wheel builds opt in via `[tool.maturin].features = ["extension-module"]` in
 # pyproject.toml. `cargo test` runs without it and links against a real Python.
-pyo3 = { version = "0.28", features = ["abi3-py310"] }
-numpy = "0.28"
+pyo3 = { version = "0.29", features = ["abi3-py310"] }
+numpy = "0.29"
 libm = "0.2"
 # Vectorised IV (n >= PARALLEL_THRESHOLD) and bundled-Greeks (n >=
 # GREEKS_PARALLEL_THRESHOLD) dispatch uses rayon's global thread pool;
