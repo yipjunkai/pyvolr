@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.5](https://github.com/yipjunkai/pyvolr/compare/v0.1.4...v0.1.5) (2026-07-01)
+
+
+### Bug Fixes
+
+* **deps:** bump pyo3 and rust-numpy to 0.29 ([#56](https://github.com/yipjunkai/pyvolr/issues/56)) ([c1e69a1](https://github.com/yipjunkai/pyvolr/commit/c1e69a1d1e7e8000883c7f1739e379505f368417))
+* truth-and-hygiene pass — claims, typed greeks, template drift ([#37](https://github.com/yipjunkai/pyvolr/issues/37)) ([59ec7ec](https://github.com/yipjunkai/pyvolr/commit/59ec7ecbeddb8eb2f5c4db8b53320daff3a653ae))
+
+
+### Documentation
+
+* theta is negative calendar theta, minus dPrice/dT ([#35](https://github.com/yipjunkai/pyvolr/issues/35)) ([ce9d5b9](https://github.com/yipjunkai/pyvolr/commit/ce9d5b9636e4f27e20a9db140d748caad97ec7ac))
+
 ## [0.1.4](https://github.com/yipjunkai/pyvolr/compare/v0.1.3...v0.1.4) (2026-06-12)
 
 

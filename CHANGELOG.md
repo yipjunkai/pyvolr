@@ -4,6 +4,28 @@ All notable changes to pyvolr are documented in this file. This file is
 maintained by [release-please](https://github.com/googleapis/release-please)
 from conventional commits — do not edit version sections by hand.
 
+## [0.1.5](https://github.com/yipjunkai/pyvolr/compare/v0.1.4...v0.1.5) (2026-07-01)
+
+
+### Features
+
+* add on_error to native implied_vol ([#46](https://github.com/yipjunkai/pyvolr/issues/46)) ([f2f49a0](https://github.com/yipjunkai/pyvolr/commit/f2f49a00654862fb29e89707e18d0ec3b7194fb4))
+* add py_vollib_vectorized compat shim ([#47](https://github.com/yipjunkai/pyvolr/issues/47)) ([7878a1c](https://github.com/yipjunkai/pyvolr/commit/7878a1c3cc07e530852a7e95a83bba081a8a1ecd))
+* add return_as to native bs/black76 API ([#45](https://github.com/yipjunkai/pyvolr/issues/45)) ([b0ba347](https://github.com/yipjunkai/pyvolr/commit/b0ba347945b380bb454ff22004b339f998efb261))
+* support numpy &gt;= 1.26 (lower the floor from &gt;= 2.0) ([#41](https://github.com/yipjunkai/pyvolr/issues/41)) ([5c16cc0](https://github.com/yipjunkai/pyvolr/commit/5c16cc06a06cb3871e3bd2c286b85195d6f17561))
+
+
+### Bug Fixes
+
+* **deps:** bump pyo3 and rust-numpy to 0.29 ([#56](https://github.com/yipjunkai/pyvolr/issues/56)) ([c1e69a1](https://github.com/yipjunkai/pyvolr/commit/c1e69a1d1e7e8000883c7f1739e379505f368417))
+* truth-and-hygiene pass — claims, typed greeks, template drift ([#37](https://github.com/yipjunkai/pyvolr/issues/37)) ([59ec7ec](https://github.com/yipjunkai/pyvolr/commit/59ec7ecbeddb8eb2f5c4db8b53320daff3a653ae))
+* validate whole flag strings in array inputs ([#33](https://github.com/yipjunkai/pyvolr/issues/33)) ([4b6546f](https://github.com/yipjunkai/pyvolr/commit/4b6546fc0ad93fa85c70cf28138f921953bba041))
+
+
+### Documentation
+
+* theta is negative calendar theta, minus dPrice/dT ([#35](https://github.com/yipjunkai/pyvolr/issues/35)) ([ce9d5b9](https://github.com/yipjunkai/pyvolr/commit/ce9d5b9636e4f27e20a9db140d748caad97ec7ac))
+
 ## [0.1.4](https://github.com/yipjunkai/pyvolr/compare/v0.1.3...v0.1.4) (2026-06-12)
 
 
