@@ -8,7 +8,10 @@ resolver = "2"
 # strategy. Workspace inheritance for version is incompatible with
 # release-please-action v4 + release-type=rust.
 edition = "2021"
-rust-version = "1.78"
+# 1.83 floor: required by pyo3 / rust-numpy 0.29 (which fixed
+# RUSTSEC-2026-0176 / -0177). abi3 wheels mean end users never compile, so this
+# only affects source builds and contributors.
+rust-version = "1.83"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/yipjunkai/pyvolr"
 homepage = "https://github.com/yipjunkai/pyvolr"

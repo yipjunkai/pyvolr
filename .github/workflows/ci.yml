@@ -168,7 +168,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # master
         with:
           # Keep in sync with rust-version in Cargo.toml.
-          toolchain: "1.78"
+          toolchain: "1.83"
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
