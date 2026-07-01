@@ -28,7 +28,7 @@ jobs:
         target: [bsm_price, iv_solve, black76_price, greeks_all, black76_greeks_all]
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           # pyo3 (transitively required via pyvolr-core) needs a Python
           # interpreter on PATH satisfying abi3-py310 at build time.
@@ -45,7 +45,7 @@ jobs:
       - name: Install cargo-fuzz
         # Prebuilt, checksum-verified binary — the previous `cargo install`
         # compiled it from source on every run.
-        uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
+        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2.82.7
         with:
           tool: cargo-fuzz@0.13.2
       - name: Restore evolved corpus
