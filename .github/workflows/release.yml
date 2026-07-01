@@ -170,13 +170,35 @@ jobs:
     timeout-minutes: 10
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
-      contents: write
+      contents: write      # create the release and upload assets (covers attest's contents:read)
+      id-token: write      # mint the OIDC token for keyless Sigstore signing
+      attestations: write  # persist the provenance to the GitHub attestations API
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: dist
           merge-multiple: true
+      # SLSA build provenance over the exact bytes about to be released. The
+      # attestation is recorded in the attestations API — end users can run
+      # `gh attestation verify <file> --repo ${{ github.repository }}` — and the
+      # Sigstore bundle is attached to the release below. create-storage-record
+      # is off: its default (true) needs an `artifact-metadata: write` scope that
+      # isn't GA, and the record is only a preview indexing feature we don't use.
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: dist/*
+          create-storage-record: false
+      # Attach the Sigstore bundle as a release asset. OpenSSF Scorecard's
+      # Signed-Releases check inspects release assets by filename suffix only, so
+      # a *.sigstore.json asset marks the release signed. Copy AFTER attesting so
+      # the bundle is not itself a subject of the attestation.
+      - name: Stage attestation bundle as a release asset
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE_PATH" "dist/pyvolr-${GITHUB_REF_NAME}.sigstore.json"
       - uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           generate_release_notes: true
