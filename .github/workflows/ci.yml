@@ -1,23 +1,14 @@
 name: ci
 
 on:
+  # No workflow-level paths-ignore on purpose: a skipped workflow never reports
+  # its checks, so a docs-only PR would leave the required `ci-passed` context
+  # permanently "Expected" and unmergeable (the `main` ruleset has no admin
+  # bypass). Instead the `changes` job below decides whether any non-docs file
+  # changed and gates the heavy jobs; `ci-passed` still reports either way.
   pull_request:
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "LICENSE*"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/FUNDING.yml"
-      - ".github/PULL_REQUEST_TEMPLATE.md"
   push:
     branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "LICENSE*"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/FUNDING.yml"
-      - ".github/PULL_REQUEST_TEMPLATE.md"
   workflow_dispatch:
 
 # Cancel in-progress runs for the same ref to save CI minutes.
@@ -29,8 +20,39 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    # Detects whether the change touches anything outside the docs/meta set.
+    # Its `code` output gates the heavy jobs below so a docs-only change skips
+    # them yet still reports a green `ci-passed`. This replaces the old
+    # workflow-level `paths-ignore` (which skipped the whole workflow and thus
+    # never reported the required check).
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          # `code` matches everything except the docs/meta globs — i.e. it is
+          # true iff at least one changed file needs the full suite. Keep this
+          # list in sync with the paths the docs workflow (if any) owns.
+          filters: |
+            code:
+              - '**'
+              - '!**.md'
+              - '!docs/**'
+              - '!LICENSE*'
+              - '!.github/ISSUE_TEMPLATE/**'
+              - '!.github/FUNDING.yml'
+              - '!.github/PULL_REQUEST_TEMPLATE.md'
+
   lint:
     name: lint
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -83,6 +105,8 @@ jobs:
 
   test-rust:
     name: test (rust)
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -107,6 +131,8 @@ jobs:
 
   test-python:
     name: test (py${{ matrix.python }} / ${{ matrix.os }})
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     strategy:
@@ -143,6 +169,8 @@ jobs:
 
   property-tests:
     name: property tests (extended)
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -161,6 +189,8 @@ jobs:
 
   msrv:
     name: msrv
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -177,6 +207,8 @@ jobs:
 
   test-numpy-floor:
     name: test (numpy floor)
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -205,10 +237,14 @@ jobs:
     # Single check that branch protection can require, instead of listing each
     # matrix entry by name. Succeeds only if all needed jobs succeeded; fails
     # if any failed or was cancelled. Runs even on partial failures because
-    # `if: always()` is set.
+    # `if: always()` is set. A `skipped` result counts as OK, so a docs-only
+    # change (heavy jobs gated out by `changes`) still reports a green
+    # `ci-passed` — that's what keeps docs PRs mergeable under the no-bypass
+    # ruleset. `changes` itself is in `needs`, so if the filter errors the gate
+    # fails instead of waving the change through.
     name: ci-passed
     if: ${{ always() }}
-    needs: [lint, test-rust, test-python, property-tests, msrv, test-numpy-floor]
+    needs: [changes, lint, test-rust, test-python, property-tests, msrv, test-numpy-floor]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
