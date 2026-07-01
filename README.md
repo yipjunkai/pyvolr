@@ -141,14 +141,13 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 - **Robust implied volatility** — Jäckel "Let's Be Rational" algorithm: rational-cubic initial guess plus Householder order-4 iteration converges to ~1e-13 precision in ≤2 iterations across the full no-arbitrage range
 - **Automatic parallelism on large batches** — `implied_vol` (above N≈1,000 rows) and the bundled `greeks` kernel (above N≈4,000) release the GIL and dispatch per-row work to rayon's global thread pool; set `RAYON_NUM_THREADS=1` to opt out
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
-- **`py_vollib` drop-in shim** — `pyvolr.compat.py_vollib` mirrors the upstream module tree (including `py_vollib.black`) for one-import-line migration
+- **`py_vollib` drop-in shims** — `pyvolr.compat.py_vollib` mirrors the upstream module tree (including `py_vollib.black`) for one-import-line migration; `pyvolr.compat.py_vollib_vectorized` mirrors the vectorized API (`vectorized_*`, `get_all_greeks`, `price_dataframe`)
 - **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
 - **Free-threaded Python ready** — a dedicated 3.14t wheel: with no GIL, every entry point scales across threads. On standard (GIL) builds, the large-batch `implied_vol` (≥1k rows) and bundled `greeks` (≥4k rows) kernels release the GIL while rayon works; `price` and single-Greek calls hold it
 - **Typed end-to-end** — pyright-strict library code, full type stubs for the Rust extension
 
 ## 🗺️ Coming soon
 
-- [ ] Drop-in compat shim for `py_vollib_vectorized` (`vectorized_*` API + `price_dataframe`/`get_all_greeks`, pandas as soft dep)
 - [ ] Bachelier (normal model, for negative rates)
 - [ ] Higher-order Greeks (vanna, vomma, charm, speed, zomma, color)
 - [ ] SIMD batch evaluation
@@ -174,6 +173,20 @@ from pyvolr.compat.py_vollib.black import black  # futures options
 ```
 
 The compat shim also preserves py_vollib's _unit conventions_: vega is per-1% vol, theta is per-day, rho is per-1% rate, and `implied_volatility` takes `flag` as its last argument. For new code, prefer the modern `pyvolr.bs` API — it accepts numpy arrays, broadcasts naturally, uses per-unit conventions consistently, and returns all Greeks in a single call.
+
+### Migrating from `py_vollib_vectorized`
+
+`pyvolr.compat.py_vollib_vectorized` mirrors the vectorized API — the `vectorized_*` functions, `get_all_greeks`, and `price_dataframe` — with the same (quirky) argument orders, `return_as` values, and `"Price"`/`"IV"`/greek column names:
+
+```python
+# Before
+from py_vollib_vectorized import vectorized_black_scholes, vectorized_implied_volatility
+
+# After
+from pyvolr.compat.py_vollib_vectorized import vectorized_black_scholes, vectorized_implied_volatility
+```
+
+Two deliberate differences: importing the shim does **not** monkeypatch `py_vollib` (call the `vectorized_*` functions directly), and `pandas` is an optional dependency — `return_as="dataframe"`/`"series"` need it (`pip install pyvolr[pandas]`) and otherwise fall back to numpy with a one-time warning.
 
 ## 🤔 Why pyvolr exists
 
