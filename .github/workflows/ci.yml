@@ -75,7 +75,7 @@ jobs:
         # Prebuilt binary, checksum-verified internally against install-action's
         # signed manifests — replaces a hand-maintained curl + sha256 pin.
         # (actionlint above keeps the curl form: install-action doesn't carry it.)
-        uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
+        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2.82.7
         with:
           tool: taplo@0.10.0
       - name: taplo
@@ -95,7 +95,7 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           # pyo3 needs to find a Python interpreter at build time to satisfy
           # the abi3-py310 minimum. extension-module is OFF in cargo test so
@@ -169,7 +169,7 @@ jobs:
         with:
           # Keep in sync with rust-version in Cargo.toml.
           toolchain: "1.78"
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
