@@ -127,7 +127,9 @@ def adapter_vollib() -> tuple[str, dict[str, Callable[..., float]]]:
         except (TypeError, ValueError):
             return float(x.iloc[0, 0])  # type: ignore[attr-defined]
 
-    return "vollib 1.0.7", {
+    from importlib.metadata import version as _pkg_version
+
+    return f"vollib {_pkg_version('vollib')}", {
         "price_call": lambda S, K, T, r, sigma: s(v_bs("c", S, K, T, r, sigma)),
         "price_put": lambda S, K, T, r, sigma: s(v_bs("p", S, K, T, r, sigma)),
         "delta_call": lambda S, K, T, r, sigma: s(v_d("c", S, K, T, r, sigma)),
@@ -265,6 +267,90 @@ def adapter_py_vollib_vectorized() -> tuple[str, dict[str, Callable[..., float]]
     }
 
 
+def adapter_opengreeks() -> tuple[str, dict[str, Callable[..., float]]]:
+    # Rust+PyO3 py_vollib-compatible competitor (2026). Legacy py_vollib
+    # conventions: per-1%-vol vega, per-day theta, per-1%-rate rho.
+    from importlib.metadata import version as _pkg_version
+
+    from opengreeks import black_scholes as og
+
+    return f"opengreeks {_pkg_version('opengreeks')}", {
+        "price_call": lambda S, K, T, r, sigma: float(og.black_scholes("c", S, K, T, r, sigma)),
+        "price_put": lambda S, K, T, r, sigma: float(og.black_scholes("p", S, K, T, r, sigma)),
+        "delta_call": lambda S, K, T, r, sigma: float(og.delta("c", S, K, T, r, sigma)),
+        "delta_put": lambda S, K, T, r, sigma: float(og.delta("p", S, K, T, r, sigma)),
+        "gamma": lambda S, K, T, r, sigma: float(og.gamma("c", S, K, T, r, sigma)),
+        "vega": lambda S, K, T, r, sigma: float(og.vega("c", S, K, T, r, sigma)) * 100.0,
+        "theta_call": lambda S, K, T, r, sigma: float(og.theta("c", S, K, T, r, sigma)) * 365.0,
+        "theta_put": lambda S, K, T, r, sigma: float(og.theta("p", S, K, T, r, sigma)) * 365.0,
+        "rho_call": lambda S, K, T, r, sigma: float(og.rho("c", S, K, T, r, sigma)) * 100.0,
+        "rho_put": lambda S, K, T, r, sigma: float(og.rho("p", S, K, T, r, sigma)) * 100.0,
+        "iv_call": lambda p, S, K, T, r: float(og.implied_volatility(p, S, K, T, r, "c")),
+        "iv_put": lambda p, S, K, T, r: float(og.implied_volatility(p, S, K, T, r, "p")),
+    }
+
+
+def _adapter_fast_vollib(backend: str) -> tuple[str, dict[str, Callable[..., float]]]:
+    # fast-vollib (arXiv:2604.27210). Legacy py_vollib conventions, same
+    # factors as vollib above. Array-in/array-out API; extract the scalar.
+    from importlib.metadata import version as _pkg_version
+
+    import fast_vollib as fv
+
+    if backend == "numba":
+        import numba  # noqa: F401 — raise (=> clean skip) when the extra isn't installed
+
+    def one(x: Any) -> float:
+        return float(np.asarray(x).ravel()[0])
+
+    def greek(name: str, flag: str, scale: float) -> Callable[..., float]:
+        fn = getattr(fv, f"vectorized_{name}")
+
+        def call(S: float, K: float, T: float, r: float, sigma: float) -> float:
+            return one(fn(flag, S, K, T, r, sigma, return_as="numpy", backend=backend)) * scale
+
+        return call
+
+    def price(flag: str) -> Callable[..., float]:
+        def call(S: float, K: float, T: float, r: float, sigma: float) -> float:
+            return one(
+                fv.fast_black_scholes(flag, S, K, T, r, sigma, return_as="numpy", backend=backend)
+            )
+
+        return call
+
+    def iv(flag: str) -> Callable[..., float]:
+        def call(p: float, S: float, K: float, T: float, r: float) -> float:
+            return one(
+                fv.fast_implied_volatility(p, S, K, T, r, flag, return_as="numpy", backend=backend)
+            )
+
+        return call
+
+    return f"fast-vollib {_pkg_version('fast-vollib')} ({backend})", {
+        "price_call": price("c"),
+        "price_put": price("p"),
+        "delta_call": greek("delta", "c", 1.0),
+        "delta_put": greek("delta", "p", 1.0),
+        "gamma": greek("gamma", "c", 1.0),
+        "vega": greek("vega", "c", 100.0),
+        "theta_call": greek("theta", "c", 365.0),
+        "theta_put": greek("theta", "p", 365.0),
+        "rho_call": greek("rho", "c", 100.0),
+        "rho_put": greek("rho", "p", 100.0),
+        "iv_call": iv("c"),
+        "iv_put": iv("p"),
+    }
+
+
+def adapter_fast_vollib_numpy() -> tuple[str, dict[str, Callable[..., float]]]:
+    return _adapter_fast_vollib("numpy")
+
+
+def adapter_fast_vollib_numba() -> tuple[str, dict[str, Callable[..., float]]]:
+    return _adapter_fast_vollib("numba")
+
+
 # IMPORTANT: vollib must be imported BEFORE py_vollib_vectorized so vollib's
 # scalar return type isn't monkeypatched out from under us.
 ADAPTERS = [
@@ -273,6 +359,9 @@ ADAPTERS = [
     adapter_blackscholes,
     adapter_quantlib,
     adapter_quantforge,
+    adapter_opengreeks,
+    adapter_fast_vollib_numpy,
+    adapter_fast_vollib_numba,
     adapter_py_vollib_vectorized,
 ]
 
