@@ -1,6 +1,6 @@
 """pyvolr: Black-Scholes-Merton pricing, Greeks, and implied volatility.
 
-Modern Rust-cored replacement for the abandoned py_vollib library.
+Modern Rust-cored, vectorized alternative to py_vollib/vollib.
 
 Quick start:
 
