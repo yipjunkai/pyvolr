@@ -652,6 +652,8 @@ mod lbr {
 
     /// Iterate `g = ln(b)/ln(β) · ... ` form (lower segment, β tiny).
     fn householder_iter_lower(beta: f64, x: f64, s: &mut f64, s_left: &mut f64, s_right: &mut f64) {
+        // beta is loop-invariant; hoisted out of the iteration (bit-identical).
+        let ln_beta = beta.ln();
         let mut ds = f64::MAX;
         let mut ds_prev = 0.0_f64;
         let mut reversal = 0;
@@ -681,7 +683,6 @@ mod lbr {
                 ds = 0.5 * (*s_left + *s_right) - *s;
             } else {
                 let ln_b = b.ln();
-                let ln_beta = beta.ln();
                 let bpob = bp / b;
                 let h = x / *s;
                 let b_halley = h * h / *s - 0.25 * *s;
@@ -782,10 +783,16 @@ mod lbr {
             } else if b < beta && *s > *s_left {
                 *s_left = *s;
             }
-            let newton = (beta - b) / bp;
-            let halley = (x / *s) * (x / *s) / *s - 0.25 * *s;
-            let hh3 = halley * halley - 3.0 * (x / (*s * *s)) * (x / (*s * *s)) - 0.25;
-            ds = newton * householder_factor(newton, halley, hh3);
+            if bp <= 0.0 {
+                // Vega numerically zero: bisect, mirroring the lower/upper
+                // segments (which guard this before their Newton steps).
+                ds = 0.5 * (*s_left + *s_right) - *s;
+            } else {
+                let newton = (beta - b) / bp;
+                let halley = (x / *s) * (x / *s) / *s - 0.25 * *s;
+                let hh3 = halley * halley - 3.0 * (x / (*s * *s)) * (x / (*s * *s)) - 0.25;
+                ds = newton * householder_factor(newton, halley, hh3);
+            }
             ds = ds.max(-0.5 * *s);
             *s += ds;
         }
