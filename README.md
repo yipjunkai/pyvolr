@@ -60,7 +60,7 @@ Also on the throughput chart: [`py_vollib_vectorized`](https://pypi.org/project/
 
 **Numerical agreement:** pyvolr matches every library above to f64 precision (~1e-13) on all well-posed inputs across price + 5 Greeks + IV (`bench/sanity_check_competitors.py`). The edges differ: `blackscholes` underflows deep-OTM prices to zero and `quantforge` hard-clamps Φ at ±8σ where pyvolr's `erfcx`-based cdf keeps the ~1e-50 price; the IV tail is the right chart, methodology in `bench/compare_tail_accuracy.py` (a known-σ ladder priced through pyvolr's mpmath-golden-pinned forward map).
 
-Reproduce it all with **`just all`** ([`just`](https://just.systems) + [`uv`](https://docs.astral.sh/uv)); per-chart recipes and details in [`bench/README.md`](bench/README.md). Measured on an Apple M4 Pro with pyvolr 0.1.5; competitor versions are pinned in the [`justfile`](justfile).
+Reproduce it all with **`just all`**, or per-chart via the recipes in the [`justfile`](justfile) (needs [`just`](https://just.systems) + [`uv`](https://docs.astral.sh/uv); uv builds the pinned environments on demand). Measured on an Apple M4 Pro with pyvolr 0.1.5; competitor versions are pinned in the justfile.
 
 ## 📦 Install
 
@@ -193,38 +193,19 @@ Full backstory, including the revival: [docs/why.md](docs/why.md).
 
 ## 📁 Project structure
 
+Directory-level map; each module documents itself in its docstring/rustdoc header.
+
 ```text
 pyvolr/
-├── crates/core/             # Rust numerical core
-│   ├── src/
-│   │   ├── lib.rs           # PyO3 bindings (flat-array entry points)
-│   │   ├── bsm.rs           # BSM pricing, d1/d2, forward price
-│   │   ├── black76.rs       # Black-76 (futures options) — delegates to BSM with q=r
-│   │   ├── greeks.rs        # Delta, gamma, theta, vega, rho
-│   │   ├── iv.rs            # Jäckel "Let's Be Rational" IV solver (Householder-4, ≤2 iters)
-│   │   └── normal.rs        # Φ / φ, erfcx (Lentz CF), inverse CDF (Wichura AS241)
-│   └── benches/             # criterion: perf-gate contracts (pricing) + experiment harness (experiments)
-├── bench/                   # Python-level speed/precision scripts (dev-only, not in CI) — see bench/README.md
-│   ├── compare_new_entrants.py         # reproduces the perf table (price/IV/greeks vs the 2026 field)
-│   ├── compare_competitors.py          # reproduces the throughput chart (8 libraries)
-│   ├── compare_tail_accuracy.py        # reproduces the deep-OTM IV-accuracy chart
-│   ├── profile_one.py                  # single-library hot loop for `just perf-stat` / samplers (Linux)
-│   ├── compare_py_vollib.py            # legacy pyvolr-vs-py_vollib scalar reproducer
-│   ├── shims/_testcapi.py              # DBL_MIN/MAX shim so the 2021 py_vollib_vectorized stack installs
-│   └── sanity_check_competitors.py     # cross-validates numerical agreement
-├── python/pyvolr/
-│   ├── bs.py                # BSM public API (numpy-broadcast wrappers)
-│   ├── black76.py           # Black-76 public API
-│   ├── _wrappers.py         # Shared FFI helpers (broadcast, flag normalize)
-│   ├── _core.pyi            # Type stubs for the Rust extension
-│   ├── compat/py_vollib/            # Drop-in shim mirroring py_vollib's tree
-│   └── compat/py_vollib_vectorized/ # Vectorized shim (vectorized_*, get_all_greeks, price_dataframe)
-├── tests/                   # pytest + hypothesis property tests
-├── .github/workflows/       # ci, release, release-please, wheel-smoke, differential, fuzz, perf, security, scorecard, audit, stale
-├── .github/scripts/         # CI helper scripts (perf-gate comparator)
-├── justfile                 # benchmark-reproduction recipes (`just all`, `just perf-stat`, ...) via uv
-├── Cargo.toml               # Rust workspace
-└── pyproject.toml           # maturin build backend + project config
+├── crates/core/     # Rust numerical core (BSM, Black-76, Greeks, Jäckel IV, Φ/erfcx) + criterion benches
+├── python/pyvolr/   # numpy-broadcasting public API, type stubs, py_vollib(+vectorized) compat shims
+├── tests/           # pytest + hypothesis property tests
+├── bench/           # dev-only speed/accuracy benchmarks vs the competitor field (not in CI)
+├── fuzz/            # cargo-fuzz targets for the numerical core
+├── tools/           # regenerable mpmath golden generator
+├── docs/            # backstory (why.md) + chart assets
+├── .github/         # CI/release workflows (all SHA-pinned) + helper scripts
+└── justfile         # benchmark-reproduction recipes (`just all`, `just perf-stat`, ...) via uv
 ```
 
 ## 📚 API reference

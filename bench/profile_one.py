@@ -22,7 +22,10 @@ adapters). Run the SAME workload + n for each and diff the counter blocks.
 Caveat: `perf stat` counts the whole process, so the warmup (imports, and
 fast-vollib's one-time numba JIT ~0.4 s) is included. Keep the loop long
 (--seconds) so it dominates, and read the ratios (IPC, cache-miss %, branch-miss
-%) rather than raw totals — they're robust to a little startup noise.
+%) rather than raw totals — they're robust to a little startup noise. Raw
+counts also mislead across libraries: the loop runs a fixed DURATION, so a
+faster library does more work in the window and racks up more events. Normalize
+to per-option (event count / (iterations x N); iterations are printed below).
 """
 
 from __future__ import annotations

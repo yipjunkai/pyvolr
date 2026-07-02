@@ -1,8 +1,9 @@
-# Benchmark reproduction for pyvolr — details in bench/README.md.
+# Benchmark reproduction for pyvolr — this file is the canonical guide.
 #
 # Requires `just` and `uv`. uv fetches the pinned Python versions and builds the
 # (cached, ephemeral) environments on demand from the `--with` specs below, so
-# there are no venvs and no requirements files to manage.
+# there are no venvs and no requirements files to manage. No `just`? Every
+# recipe is plain shell — copy its `uv run ...` lines straight out of this file.
 #
 #   just                           # list recipes
 #   just all                       # the speed table + both charts
@@ -23,15 +24,20 @@ export PYTHONPATH := justfile_directory() / "bench/shims"
 
 run := "uv run --no-project"
 
-# The three environments the charts are stitched from — competitor versions
-# pinned to what the README's numbers were measured against. The split is
-# inherent: py_vollib_vectorized's old numba stack can't coexist with the modern
-# one, and quantforge pins numpy and needs Python >= 3.12.
+# The three environments the charts are stitched from — each script measures
+# whatever imports and skips the rest, so a broken competitor never takes down a
+# sweep. pyvolr is installed identically in all three (one pyvolr line on the
+# charts); competitor versions are pinned to what the README's numbers were
+# measured against — bump a pin deliberately, then re-measure the affected
+# chart. The three-way split is inherent: py_vollib_vectorized's old numba
+# stack can't coexist with the modern one, and quantforge pins numpy and needs
+# Python >= 3.12.
 entrants := "--python 3.12 --with 'vollib==1.0.11' --with 'opengreeks==0.2.0' --with 'fast-vollib[numba]==0.1.6' --with 'matplotlib>=3.8'"
 quantforge := "--python 3.12 --with 'quantforge==0.1.1'"
 # Exact, mutually-compatible legacy pins (anything newer breaks py_vollib_vectorized 0.1.1):
 # numba 0.66 fails its jitted kernels; the revived py_lets_be_rational (>=1.1) dropped the
 # numba internals it calls, so both are pinned old (the _testcapi shim above covers the rest).
+# Reproducing a dead library takes all of this; running pyvolr takes `pip install pyvolr`.
 legacy := "--python 3.11 --with 'py_vollib_vectorized==0.1.1' --with 'py_vollib==1.0.7' --with 'py_lets_be_rational==1.0.1' --with 'numba==0.65.1' --with 'blackscholes==0.2.0' --with 'QuantLib==1.42.1' --with 'matplotlib>=3.8'"
 
 # list recipes
@@ -73,7 +79,10 @@ sanity:
 # kernel.perf_event_paranoid<=1 or run with sudo). Single-threaded and core-
 # pinned so you compare per-core kernel efficiency, not thread count. Run the
 # SAME workload+n for each library and diff the counter blocks (IPC, cache-miss
-# %, branch-miss %). Args are positional — lib workload n; workload = price|iv|greeks;
+# %, branch-miss % — see profile_one.py's docstring for how to normalize).
+# For pyvolr's Rust kernel in isolation (no Python/uv noise) profile the
+# criterion benches instead: `cargo flamegraph --bench pricing`, or samply.
+# Args are positional — lib workload n; workload = price|iv|greeks;
 # lib = pyvolr|opengreeks|fast-vollib-numba|fast-vollib-numpy|vollib. e.g.:
 #   just perf-stat pyvolr     iv 100000
 #   just perf-stat opengreeks iv 100000
