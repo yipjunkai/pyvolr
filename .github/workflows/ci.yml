@@ -22,32 +22,42 @@ permissions:
 jobs:
   changes:
     # Detects whether the change touches anything outside the docs/meta set.
-    # Its `code` output gates the heavy jobs below so a docs-only change skips
-    # them yet still reports a green `ci-passed`. This replaces the old
-    # workflow-level `paths-ignore` (which skipped the whole workflow and thus
-    # never reported the required check).
+    # `code` gates the heavy jobs below so a docs-only change skips them yet
+    # still reports a green `ci-passed`. This replaces the old workflow-level
+    # `paths-ignore` (which skipped the whole workflow and never reported the
+    # required check).
+    #
+    # We match a positive `docs` filter with `predicate-quantifier: every` (true
+    # iff EVERY changed file is docs/meta) and invert it, rather than a
+    # `['**', '!*.md', …]` exclusion list: dorny/paths-filter ORs its pattern
+    # array, so a bare `**` matches every file and the `!` negations never
+    # subtract — that made `code` always true and skipped nothing.
     name: changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      code: ${{ steps.filter.outputs.code }}
+      # code = "not a docs-only change": docs is 'true' only when every changed
+      # file matched the docs filter, so invert it.
+      code: ${{ steps.filter.outputs.docs != 'true' }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
-          # `code` matches everything except the docs/meta globs — i.e. it is
-          # true iff at least one changed file needs the full suite. Keep this
-          # list in sync with the paths the docs workflow (if any) owns.
+          # `every`: the `docs` filter is true only when ALL changed files match
+          # one of these globs (a docs-only change). Keep this list in sync with
+          # what should NOT trigger the full suite. `*.md` covers root files;
+          # `**/*.md` covers nested ones.
+          predicate-quantifier: 'every'
           filters: |
-            code:
-              - '**'
-              - '!**.md'
-              - '!docs/**'
-              - '!LICENSE*'
-              - '!.github/ISSUE_TEMPLATE/**'
-              - '!.github/FUNDING.yml'
-              - '!.github/PULL_REQUEST_TEMPLATE.md'
+            docs:
+              - '*.md'
+              - '**/*.md'
+              - 'docs/**'
+              - 'LICENSE*'
+              - '.github/ISSUE_TEMPLATE/**'
+              - '.github/FUNDING.yml'
+              - '.github/PULL_REQUEST_TEMPLATE.md'
 
   lint:
     name: lint
