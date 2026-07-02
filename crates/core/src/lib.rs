@@ -1,8 +1,11 @@
 //! pyvolr Rust core.
 //!
-//! All PyO3-exposed functions operate on flat 1-D numpy arrays. The Python wrapper
-//! is responsible for broadcasting and reshape; this layer assumes equal-length
-//! contiguous f64 (and i8 for option-flag) inputs.
+//! Array entry points operate on flat 1-D numpy arrays; the Python wrapper
+//! is responsible for broadcasting and reshape, and this layer assumes
+//! equal-length contiguous f64 (and i8 for option-flag) inputs. Each endpoint
+//! also has a `*_scalar` twin taking plain f64/i8 and returning bare floats —
+//! same kernels, bit-for-bit — which the wrapper dispatches to when every
+//! input is a numeric scalar.
 
 // Modules are pub so the pyvolr-fuzz workspace (fuzz/) can drive them
 // directly. The PyO3 surface below is the only consumer in normal builds.
@@ -199,6 +202,123 @@ define_black76!(black76_theta, black76::theta, with_flag);
 define_black76!(black76_rho, black76::rho, with_flag);
 define_black76!(black76_gamma, black76::gamma, no_flag);
 define_black76!(black76_vega, black76::vega, no_flag);
+
+// Scalar fast-path twins: one `#[pyfunction]` per array endpoint, taking
+// plain f64/i8 arguments and returning bare floats — no arrays, no Vec, no
+// numpy result object. Same kernel calls as the array forms, bit-for-bit.
+// The Python wrapper dispatches here when every input is a numeric scalar
+// (`_wrappers.SCALAR_NUMERIC`); flag is pre-validated to ±1 upstream. These
+// run under the GIL: at one row there is nothing to parallelize, so the
+// rayon/`py.detach` story is unchanged.
+macro_rules! define_scalar {
+    ($pyname:ident, $rustfn:path, with_flag($($arg:ident),+)) => {
+        #[pyfunction]
+        #[allow(clippy::too_many_arguments)]
+        fn $pyname(flag: i8, $($arg: f64),+) -> f64 {
+            $rustfn(Flag::from_i8(flag), $($arg),+)
+        }
+    };
+    ($pyname:ident, $rustfn:path, no_flag($($arg:ident),+)) => {
+        #[pyfunction]
+        fn $pyname($($arg: f64),+) -> f64 {
+            $rustfn($($arg),+)
+        }
+    };
+}
+
+define_scalar!(
+    bsm_price_scalar,
+    bsm::price,
+    with_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(
+    bsm_delta_scalar,
+    greeks::delta,
+    with_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(
+    bsm_theta_scalar,
+    greeks::theta,
+    with_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(bsm_rho_scalar, greeks::rho, with_flag(s, k, t, r, q, sigma));
+define_scalar!(
+    bsm_gamma_scalar,
+    greeks::gamma,
+    no_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(bsm_vega_scalar, greeks::vega, no_flag(s, k, t, r, q, sigma));
+define_scalar!(
+    black76_price_scalar,
+    black76::price,
+    with_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_delta_scalar,
+    black76::delta,
+    with_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_theta_scalar,
+    black76::theta,
+    with_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_rho_scalar,
+    black76::rho,
+    with_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_gamma_scalar,
+    black76::gamma,
+    no_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_vega_scalar,
+    black76::vega,
+    no_flag(f, k, t, r, sigma)
+);
+
+/// Scalar twin of `bsm_greeks`: `(delta, gamma, vega, theta, rho)` for one option.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn bsm_greeks_scalar(
+    flag: i8,
+    s: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    q: f64,
+    sigma: f64,
+) -> (f64, f64, f64, f64, f64) {
+    greeks::all(Flag::from_i8(flag), s, k, t, r, q, sigma)
+}
+
+/// Scalar twin of `black76_greeks`.
+#[pyfunction]
+fn black76_greeks_scalar(
+    flag: i8,
+    f: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    sigma: f64,
+) -> (f64, f64, f64, f64, f64) {
+    black76::all(Flag::from_i8(flag), f, k, t, r, sigma)
+}
+
+/// Scalar twin of `bsm_iv`.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn bsm_iv_scalar(target_price: f64, flag: i8, s: f64, k: f64, t: f64, r: f64, q: f64) -> f64 {
+    iv::solve(target_price, Flag::from_i8(flag), s, k, t, r, q)
+}
+
+/// Scalar twin of `black76_iv` (the BSM solver with q = r, as in `black76_iv`).
+#[pyfunction]
+fn black76_iv_scalar(target_price: f64, flag: i8, f: f64, k: f64, t: f64, r: f64) -> f64 {
+    iv::solve(target_price, Flag::from_i8(flag), f, k, t, r, r)
+}
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -453,5 +573,22 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(black76_rho, m)?)?;
     m.add_function(wrap_pyfunction!(black76_greeks, m)?)?;
     m.add_function(wrap_pyfunction!(black76_iv, m)?)?;
+    // Scalar fast-path twins, in the same order as their array counterparts.
+    m.add_function(wrap_pyfunction!(bsm_price_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_delta_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_gamma_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_vega_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_theta_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_rho_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_greeks_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_iv_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_price_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_delta_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_gamma_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_vega_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_theta_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_rho_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_greeks_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_iv_scalar, m)?)?;
     Ok(())
 }

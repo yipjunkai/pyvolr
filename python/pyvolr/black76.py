@@ -7,7 +7,9 @@ at the risk-free rate). See `docs/why.md` and `crates/core/src/black76.rs`
 for the relationship to BSM.
 
 API mirrors `pyvolr.bs`: positional flag, keyword `F` (forward), `K`, `T`, `r`,
-`sigma`. No `q` parameter — Black-76 has no dividend yield concept.
+`sigma`. No `q` parameter — Black-76 has no dividend yield concept. All-scalar
+calls take the same transparent scalar fast path as `pyvolr.bs` (dedicated
+scalar kernels, bit-identical results).
 
 Conventions (same as `pyvolr.bs`):
     - `T` is time to expiry in years.
@@ -35,18 +37,21 @@ from typing import TYPE_CHECKING, cast, overload
 
 from pyvolr import _core
 from pyvolr._wrappers import (
-    FlagInput as _FlagInput,
-)
-from pyvolr._wrappers import (
+    SCALAR_NUMERIC,
     Formatted,
     Greeks,
     GreeksResult,
     OnError,
     ReturnAs,
     apply_on_error,
+    apply_on_error_scalar,
     broadcast_f64,
     format_result,
     normalize_flag,
+    scalar_flag_or_none,
+)
+from pyvolr._wrappers import (
+    FlagInput as _FlagInput,
 )
 from pyvolr._wrappers import (
     Result as _Result,
@@ -118,6 +123,18 @@ def price(
 
     ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
     """
+    # Scalar fast path; same dispatch pattern as pyvolr.bs.price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        iflag = scalar_flag_or_none(flag)
+        if iflag is not None:
+            return _core.black76_price_scalar(iflag, F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.black76_price(flag_arr, *flat)
@@ -171,6 +188,18 @@ def delta(
 
     ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
     """
+    # Scalar fast path; same dispatch pattern as pyvolr.bs.price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        iflag = scalar_flag_or_none(flag)
+        if iflag is not None:
+            return _core.black76_delta_scalar(iflag, F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.black76_delta(flag_arr, *flat)
@@ -220,6 +249,16 @@ def gamma(
 
     ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
     """
+    # Scalar fast path; same dispatch pattern as pyvolr.bs.price() (no flag).
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        return _core.black76_gamma_scalar(F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     out = _core.black76_gamma(*flat)
     return format_result({"gamma": out}, shape, return_as)
@@ -268,6 +307,16 @@ def vega(
 
     ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
     """
+    # Scalar fast path; same dispatch pattern as pyvolr.bs.price() (no flag).
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        return _core.black76_vega_scalar(F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     out = _core.black76_vega(*flat)
     return format_result({"vega": out}, shape, return_as)
@@ -323,6 +372,18 @@ def theta(
 
     ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
     """
+    # Scalar fast path; same dispatch pattern as pyvolr.bs.price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        iflag = scalar_flag_or_none(flag)
+        if iflag is not None:
+            return _core.black76_theta_scalar(iflag, F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.black76_theta(flag_arr, *flat)
@@ -380,6 +441,18 @@ def rho(
 
     ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
     """
+    # Scalar fast path; same dispatch pattern as pyvolr.bs.price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        iflag = scalar_flag_or_none(flag)
+        if iflag is not None:
+            return _core.black76_rho_scalar(iflag, F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     out = _core.black76_rho(flag_arr, *flat)
@@ -469,6 +542,21 @@ def implied_vol(
       - `T <= 0`, `F <= 0`, or `K <= 0`,
       - any input is non-finite.
     """
+    # Scalar fast path; same dispatch pattern as pyvolr.bs.price(), with the
+    # scalar on_error twin (identical messages and warning depth).
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(price, SCALAR_NUMERIC)
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+    ):
+        iflag = scalar_flag_or_none(flag)
+        if iflag is not None:
+            out = _core.black76_iv_scalar(price, iflag, F, K, T, r)  # pyright: ignore[reportArgumentType]
+            apply_on_error_scalar(out, on_error)
+            return out
     flat, shape = broadcast_f64(price, F, K, T, r)
     flag_arr = normalize_flag(flag, shape).ravel()
     p_arr, f_arr, k_arr, t_arr, r_arr = flat
@@ -522,6 +610,20 @@ def greeks(
     free-threaded builds), do not mutate the input arrays from other
     threads — they are read in place, zero-copy.
     """
+    # Scalar fast path; same dispatch pattern as pyvolr.bs.price(). Produces
+    # the same Greeks dict the array path yields for all-scalar inputs.
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        iflag = scalar_flag_or_none(flag)
+        if iflag is not None:
+            d, g, v, th, rh = _core.black76_greeks_scalar(iflag, F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
+            return {"delta": d, "gamma": g, "theta": th, "vega": v, "rho": rh}
     flat, shape = broadcast_f64(F, K, T, r, sigma)
     flag_arr = normalize_flag(flag, shape).ravel()
     d, g, v, th, rh = _core.black76_greeks(flag_arr, *flat)
