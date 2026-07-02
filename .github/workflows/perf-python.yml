@@ -1,0 +1,91 @@
+name: perf-python
+
+# Gates the Python wrapper's latency. The scalar fast path lives almost
+# entirely in python/, where the criterion gate (perf.yml) has no visibility.
+# Both measurements run against the SAME compiled extension (built once from
+# the PR head; the base checkout swaps only python/pyvolr's tracked files and
+# leaves the untracked .so in place), so the head/base ratio is immune to
+# runner speed. The ceiling is deliberately coarse — see check_python_perf.py.
+#
+# A separate workflow (not a job in perf.yml) so python-only PRs don't also
+# pay for the Rust criterion benches: `on.paths` filters are workflow-wide.
+
+on:
+  pull_request:
+    paths:
+      - "python/**"
+      - "pyproject.toml"
+      - ".github/workflows/perf-python.yml"
+      - ".github/scripts/check_python_perf.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-python-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perf-python:
+    name: perf-gate-python
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Head may be at most this multiple of base on any metric. Coarse on
+      # purpose: the regression class this catches (a broken dispatch guard
+      # falling back to the numpy broadcast machinery) is 15-20x.
+      PYTHON_PERF_MAX_RATIO: "2.0"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Both the PR head and the base ref's python/ tree are needed.
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: perf-python
+
+      # Build the extension once, from the PR head. maturin develop drops the
+      # .so inside python/pyvolr/ (untracked), so the base-ref checkout below
+      # leaves it in place and both wrappers drive identical kernels. The
+      # maturin pin range mirrors pyproject's [build-system] requires.
+      - name: Build extension (PR head)
+        run: |
+          python -m venv .venv-perf
+          .venv-perf/bin/pip install "maturin>=1.13,<2.0"
+          source .venv-perf/bin/activate
+          maturin develop --release
+
+      - name: Measure (PR head)
+        run: .venv-perf/bin/python .github/scripts/check_python_perf.py measure /tmp/head.json
+
+      # Swap only the wrapper to the base ref and re-measure on the same
+      # extension. continue-on-error mirrors perf.yml's base bench: a base
+      # wrapper that can't run against the head-built FFI (a breaking-FFI PR)
+      # bootstraps instead of failing.
+      - name: Measure (base ref wrapper)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -e
+          git fetch origin "$BASE_REF" --depth=1
+          git checkout -f "origin/$BASE_REF" -- python/pyvolr
+          .venv-perf/bin/python .github/scripts/check_python_perf.py measure /tmp/base.json
+
+      # Return the working tree to the PR head so later steps (and the
+      # comparator script itself) see the code under review.
+      - name: Restore PR head wrapper
+        if: always() && github.event_name == 'pull_request'
+        run: git checkout -f "$GITHUB_SHA" -- python/pyvolr
+
+      # Bootstrap runs (no /tmp/base.json) print a notice and exit 0.
+      - name: Compare
+        run: >-
+          .venv-perf/bin/python .github/scripts/check_python_perf.py
+          compare /tmp/base.json /tmp/head.json "$PYTHON_PERF_MAX_RATIO"
