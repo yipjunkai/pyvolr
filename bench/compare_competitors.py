@@ -1,5 +1,6 @@
 """Benchmark pyvolr against the live competitor set (2026-07).
 
+Setup + one-command runner: bench/README.md (or `just throughput`).
 Run in three phases against three venvs, then chart the merged result:
 
     # phase 1 — legacy stack: py_vollib_vectorized / blackscholes / QuantLib

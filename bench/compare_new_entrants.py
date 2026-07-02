@@ -1,6 +1,7 @@
 """Trigger-evaluation benchmark: pyvolr vs the 2026 entrants (price, IV, greeks).
 
-Run in the dedicated venv (Python 3.12: pyvolr, vollib 1.0.11, opengreeks,
+Setup + one-command runner: bench/README.md (or `just table`).
+Runs in the modern venv (.venv-bench-entrants — pyvolr, vollib, opengreeks,
 fast-vollib[numba]):
 
     .venv-bench-entrants/bin/python bench/compare_new_entrants.py

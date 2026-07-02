@@ -1,16 +1,18 @@
 """Implied-vol recovery accuracy vs option-price depth (the deep-OTM tail).
 
-Run the sweep in each venv, then chart the merged result:
+Setup + one-command runner: bench/README.md (or `just accuracy`).
+Sweep in each venv, then chart the merged result:
 
     .venv-bench-entrants/bin/python bench/compare_tail_accuracy.py sweep
     .venv-bench/bin/python          bench/compare_tail_accuracy.py sweep
     .venv-bench312/bin/python       bench/compare_tail_accuracy.py sweep
-    .venv-bench/bin/python          bench/compare_tail_accuracy.py chart
+    .venv-bench-entrants/bin/python bench/compare_tail_accuracy.py chart
 
 Methodology: a ladder of well-posed deep-OTM calls (K=100, T=0.05, r=0.05,
-sigma_true=0.20; S swept from ~96 down to ~24) gives target prices spanning
-~1e-1 down to ~1e-220. Each library inverts the same target price; the
-plotted quantity is |sigma_recovered - sigma_true| / sigma_true.
+sigma_true=0.16; S swept ~99 down to ~33) gives target prices spanning ~1e-1
+down to ~1e-215. Each library inverts the same target price; the plotted
+quantity is |sigma_recovered - sigma_true| / sigma_true. (sigma_true avoids
+0.20 on purpose — see the note at SIGMA_TRUE for why.)
 
 The forward map (sigma_true -> price) is pyvolr's normalised-Black engine,
 which is pinned to 60-digit mpmath goldens at ~1-ULP through this region
