@@ -4,9 +4,10 @@
 # (cached, ephemeral) environments on demand from the `--with` specs below, so
 # there are no venvs and no requirements files to manage.
 #
-#   just              # list recipes
-#   just all          # the speed table + both charts
-#   just accuracy     # just the deep-OTM IV-accuracy chart
+#   just                           # list recipes
+#   just all                       # the speed table + both charts
+#   just accuracy                  # just the deep-OTM IV-accuracy chart
+#   just perf-stat pyvolr iv 100000   # CPU counters for one library's kernel (Linux)
 #   just pyvolr_with='--with-editable .' all   # benchmark a LOCAL build (needs Rust + maturin)
 #
 # Absolute timings are hardware-specific (the committed numbers are an Apple M4
@@ -67,6 +68,19 @@ sanity:
     {{run}} {{entrants}}   {{pyvolr_with}} -- python bench/sanity_check_competitors.py
     {{run}} {{legacy}}     {{pyvolr_with}} -- python bench/sanity_check_competitors.py
     {{run}} {{quantforge}} {{pyvolr_with}} -- python bench/sanity_check_competitors.py
+
+# CPU-counter comparison for ONE library — Linux only (needs `perf`; set
+# kernel.perf_event_paranoid<=1 or run with sudo). Single-threaded and core-
+# pinned so you compare per-core kernel efficiency, not thread count. Run the
+# SAME workload+n for each library and diff the counter blocks (IPC, cache-miss
+# %, branch-miss %). Args are positional — lib workload n; workload = price|iv|greeks;
+# lib = pyvolr|opengreeks|fast-vollib-numba|fast-vollib-numpy|vollib. e.g.:
+#   just perf-stat pyvolr     iv 100000
+#   just perf-stat opengreeks iv 100000
+perf-stat lib='pyvolr' workload='iv' n='100000' seconds='5' core='0':
+    @{{run}} {{entrants}} {{pyvolr_with}} -- python -c "pass"   # build/cache the env first, off the clock
+    RAYON_NUM_THREADS=1 taskset -c {{core}} perf stat -d -- \
+      {{run}} {{entrants}} {{pyvolr_with}} -- python bench/profile_one.py {{lib}} {{workload}} {{n}} --seconds {{seconds}}
 
 # remove the local result caches (they merge across runs otherwise)
 clean:

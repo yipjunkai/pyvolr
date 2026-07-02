@@ -72,7 +72,39 @@ is unaffected.
 | `compare_competitors.py`        | The **throughput chart** (8 libraries): `bench` sweeps, `chart` renders   |
 | `compare_tail_accuracy.py`      | The **IV accuracy chart**: `sweep` per env, `chart` renders               |
 | `sanity_check_competitors.py`   | Numerical cross-validation over a 9-cell grid (a correctness check)       |
+| `profile_one.py`                | Single-library hot-loop driver for `perf stat` / samplers (see below)     |
 | `compare_py_vollib.py`          | Legacy pyvolr-vs-py_vollib scalar reproducer (predates the field above)   |
+
+## Profiling: `perf stat` (Linux)
+
+The tables above are wall-clock. To see *why* pyvolr wins or loses a workload —
+IPC, cache misses, branch mispredicts — profile one library's hot loop at a
+time. **`just perf-stat`** does this on Linux:
+
+```bash
+just perf-stat pyvolr     iv 100000      # args are positional: lib workload n
+just perf-stat opengreeks iv 100000
+# ...then diff the two `perf stat` counter blocks.
+```
+
+It runs `bench/profile_one.py` (one library's `price`/`iv`/`greeks` call in a
+tight loop, after a warmup) under `perf stat -d`, **single-threaded and pinned to
+one core** (`RAYON_NUM_THREADS=1 taskset -c 0`) so you compare per-core kernel
+efficiency rather than thread count. Run the *same* `workload` + `n` for each
+library; libraries are `pyvolr`, `opengreeks`, `fast-vollib-numba`,
+`fast-vollib-numpy`, `vollib`.
+
+Notes:
+
+- **Linux only** — `perf` and `taskset` don't exist on macOS (use `py-spy
+  --native` or Instruments there). On the friend's box: `perf` installed, and
+  `sudo sysctl kernel.perf_event_paranoid=1` (or run with `sudo`).
+- **Read the ratios, not the totals.** `perf stat` counts the whole process, so
+  the warmup (imports; fast-vollib's one-time numba JIT ≈0.4 s) is included —
+  IPC and the miss *percentages* are robust to that; raw cycle counts less so.
+  Bump `--seconds` (5th recipe arg) to dilute startup further.
+- For pyvolr's Rust kernel *in isolation* (no Python/uv noise), profile the
+  `criterion` benches instead: `cargo flamegraph --bench pricing` or `samply`.
 
 ## Without `just`
 

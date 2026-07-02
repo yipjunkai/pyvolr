@@ -213,11 +213,13 @@ pyvolr/
 │   │   ├── iv.rs            # Jäckel "Let's Be Rational" IV solver (Householder-4, ≤2 iters)
 │   │   └── normal.rs        # Φ / φ, erfcx (Lentz CF), inverse CDF (Wichura AS241)
 │   └── benches/             # criterion: perf-gate contracts (pricing) + experiment harness (experiments)
-├── bench/                   # Python-level speed/precision scripts (dev-only, not in CI)
+├── bench/                   # Python-level speed/precision scripts (dev-only, not in CI) — see bench/README.md
 │   ├── compare_new_entrants.py         # reproduces the perf table (price/IV/greeks vs the 2026 field)
 │   ├── compare_competitors.py          # reproduces the throughput chart (8 libraries)
 │   ├── compare_tail_accuracy.py        # reproduces the deep-OTM IV-accuracy chart
+│   ├── profile_one.py                  # single-library hot loop for `just perf-stat` / samplers (Linux)
 │   ├── compare_py_vollib.py            # legacy pyvolr-vs-py_vollib scalar reproducer
+│   ├── shims/_testcapi.py              # DBL_MIN/MAX shim so the 2021 py_vollib_vectorized stack installs
 │   └── sanity_check_competitors.py     # cross-validates numerical agreement
 ├── python/pyvolr/
 │   ├── bs.py                # BSM public API (numpy-broadcast wrappers)
@@ -229,6 +231,7 @@ pyvolr/
 ├── tests/                   # pytest + hypothesis property tests
 ├── .github/workflows/       # ci, release, release-please, wheel-smoke, differential, fuzz, perf, security, scorecard, audit, stale
 ├── .github/scripts/         # CI helper scripts (perf-gate comparator)
+├── justfile                 # benchmark-reproduction recipes (`just all`, `just perf-stat`, ...) via uv
 ├── Cargo.toml               # Rust workspace
 └── pyproject.toml           # maturin build backend + project config
 ```
