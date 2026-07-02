@@ -1,6 +1,6 @@
 """Cross-validate pyvolr's numerical outputs against the live competitor set.
 
-Setup + one-command runner: bench/README.md (or `just sanity`).
+One-command runner: `just sanity` (env pins + setup live in the repo justfile).
 Runs in each venv and aggregates:
 
     .venv-bench-entrants/bin/python bench/sanity_check_competitors.py

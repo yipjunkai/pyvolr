@@ -1,6 +1,6 @@
 """Implied-vol recovery accuracy vs option-price depth (the deep-OTM tail).
 
-Setup + one-command runner: bench/README.md (or `just accuracy`).
+One-command runner: `just accuracy` (env pins + setup live in the repo justfile).
 Sweep in each venv, then chart the merged result:
 
     .venv-bench-entrants/bin/python bench/compare_tail_accuracy.py sweep

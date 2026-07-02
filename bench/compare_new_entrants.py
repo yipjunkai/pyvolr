@@ -1,6 +1,6 @@
 """Trigger-evaluation benchmark: pyvolr vs the 2026 entrants (price, IV, greeks).
 
-Setup + one-command runner: bench/README.md (or `just table`).
+One-command runner: `just table` (env pins + setup live in the repo justfile).
 Runs in the modern venv (.venv-bench-entrants — pyvolr, vollib, opengreeks,
 fast-vollib[numba]):
 
