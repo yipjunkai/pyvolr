@@ -1,9 +1,11 @@
 """Cross-validate pyvolr's numerical outputs against the live competitor set.
 
-Run in both venvs and aggregate:
+Setup + one-command runner: bench/README.md (or `just sanity`).
+Runs in each venv and aggregates:
 
-    .venv-bench/bin/python    bench/sanity_check_competitors.py
-    .venv-bench312/bin/python bench/sanity_check_competitors.py
+    .venv-bench-entrants/bin/python bench/sanity_check_competitors.py
+    .venv-bench/bin/python          bench/sanity_check_competitors.py
+    .venv-bench312/bin/python       bench/sanity_check_competitors.py
 
 Each phase reports max abs/rel diffs (vs pyvolr) for every library that
 imports successfully, across price + 5 Greeks + implied volatility, for
