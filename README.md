@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/pyvolr.svg)](https://pypi.org/project/pyvolr/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pyvolr.svg)](https://pypi.org/project/pyvolr/)
 [![Wheel](https://img.shields.io/pypi/wheel/pyvolr.svg)](https://pypi.org/project/pyvolr/#files)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/yipjunkai/pyvolr/badge)](https://securityscorecards.dev/viewer/?uri=github.com/yipjunkai/pyvolr)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/yipjunkai/pyvolr/badge)](https://scorecard.dev/viewer/?uri=github.com/yipjunkai/pyvolr)
 [![CI](https://github.com/yipjunkai/pyvolr/actions/workflows/ci.yml/badge.svg)](https://github.com/yipjunkai/pyvolr/actions/workflows/ci.yml)
 [![License](https://img.shields.io/pypi/l/pyvolr.svg)](#-license)
 
@@ -216,9 +216,10 @@ pyvolr/
 │   ├── black76.py           # Black-76 public API
 │   ├── _wrappers.py         # Shared FFI helpers (broadcast, flag normalize)
 │   ├── _core.pyi            # Type stubs for the Rust extension
-│   └── compat/py_vollib/    # Drop-in shim mirroring py_vollib's tree
+│   ├── compat/py_vollib/            # Drop-in shim mirroring py_vollib's tree
+│   └── compat/py_vollib_vectorized/ # Vectorized shim (vectorized_*, get_all_greeks, price_dataframe)
 ├── tests/                   # pytest + hypothesis property tests
-├── .github/workflows/       # ci, release, release-please, differential, fuzz, perf, security, scorecard, stale
+├── .github/workflows/       # ci, release, release-please, wheel-smoke, differential, fuzz, perf, security, scorecard, audit, stale
 ├── .github/scripts/         # CI helper scripts (perf-gate comparator)
 ├── Cargo.toml               # Rust workspace
 └── pyproject.toml           # maturin build backend + project config
@@ -241,6 +242,7 @@ pyvolr/
 | `black76.greeks(flag, F, K, T, r, sigma)`      | `dict` of all five Greeks  | all numeric inputs     |
 | `black76.implied_vol(price, flag, F, K, T, r)` | σ (NaN on bound violation) | price + numeric inputs |
 | `pyvolr.compat.py_vollib.…`                    | py_vollib-shaped scalars   | n/a (scalar API)       |
+| `pyvolr.compat.py_vollib_vectorized.…`         | arrays / DataFrame         | all numeric inputs     |
 
 `flag` accepts `'c'`/`'C'` (call), `'p'`/`'P'` (put), or an array thereof.
 

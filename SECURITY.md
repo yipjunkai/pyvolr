@@ -2,11 +2,11 @@
 
 ## Supported versions
 
-| Version | Supported |
-| ------- | --------- |
-| 0.1.x   | yes       |
+pyvolr is solo-maintained: only the **latest released minor version** receives
+security fixes. Older minors are not patched — upgrade to the most recent
+[release][rel] before reporting.
 
-Until pyvolr reaches 1.0, only the latest minor version receives security fixes.
+[rel]: https://github.com/yipjunkai/pyvolr/releases/latest
 
 ## Reporting a vulnerability
 
@@ -22,12 +22,13 @@ Acknowledgement is targeted within 72 hours. There is no separate email contact 
 
 ## What to report
 
-- Numerical correctness bugs that could be exploited (e.g. crafted inputs causing infinite loops, panics that propagate as crashes, or values that wildly diverge from the reference implementation in a financially material way)
-- Memory safety issues in the Rust extension surface (FFI boundary, numpy array handling)
-- Supply chain concerns (dependency vulnerabilities not yet flagged by `cargo audit` / `pip-audit`)
+- Memory-safety issues at the Rust ↔ Python boundary — the numerical core sets `unsafe_code = "forbid"`, so the likeliest surface is the `rust-numpy` / PyO3 buffer handling (out-of-bounds reads/writes, buffer aliasing, use-after-free crossing the FFI edge)
+- Robustness / denial-of-service — crafted input that triggers a panic-as-crash, an infinite loop, or unbounded allocation (adversarial array shapes, non-finite or extreme values, or inputs that stop the implied-volatility solver from terminating)
+- Supply-chain concerns — dependency vulnerabilities not yet flagged by Dependabot or `cargo audit`, or a problem with the integrity or build provenance of the published PyPI wheels
 
 ## What is not in scope
 
-- Correctness disagreements within published numerical tolerance (open a regular issue)
-- Performance issues (open a regular issue)
-- Feature requests (open a regular issue)
+- Numerical disagreement or precision differences against a reference implementation — these are correctness bugs, not vulnerabilities (open a regular bug report, or use the "py_vollib drift" template)
+- Missing models or instruments not yet supported (open a feature request)
+- Performance or throughput issues (open a regular issue)
+- Feature requests
