@@ -1,20 +1,27 @@
-"""Benchmark pyvolr against the live competitor set (2026-05).
+"""Benchmark pyvolr against the live competitor set (2026-07).
 
-Run in two phases against two venvs, then chart the merged result:
+Run in three phases against three venvs, then chart the merged result:
 
-    # phase 1 — pure-Python and numba/QuantLib stack (Python 3.11)
+    # phase 1 — legacy stack: py_vollib_vectorized / blackscholes / QuantLib
+    # (Python 3.11; old vollib 1.0.7 pinned here as py_vollib_vectorized's base)
     .venv-bench/bin/python bench/compare_competitors.py bench
 
     # phase 2 — quantforge (Python 3.12, separate venv because quantforge
     # requires >=3.12 and py_vollib needs <=3.11)
     .venv-bench312/bin/python bench/compare_competitors.py bench
 
-    # chart — combines both phases and pops the plot
+    # phase 3 — 2026 entrants: pyvolr (PyPI wheel), vollib 1.0.11,
+    # opengreeks, fast-vollib[numba] (Python 3.12)
+    .venv-bench-entrants/bin/python bench/compare_competitors.py bench
+
+    # chart — combines all phases and writes docs/assets/*.svg
     .venv-bench/bin/python bench/compare_competitors.py chart
 
-Each phase appends to bench/.competitor_results.json. Skipped libraries
-(import failure, runtime error, would-take-forever) are logged but never
-break the run.
+Each phase appends to bench/.competitor_results.json (prune stale
+version-keyed entries when re-running after a library bump). Skipped
+libraries (import failure, runtime error, would-take-forever) are logged
+but never break the run. The IV/greeks trigger-evaluation benchmark lives
+in compare_new_entrants.py; accuracy in sanity_check_competitors.py.
 """
 
 from __future__ import annotations
@@ -98,12 +105,14 @@ def adapter_pyvolr():
 
 
 def adapter_vollib():
+    from importlib.metadata import version as _pkg_version
+
     from vollib.black_scholes import black_scholes as v_bs
 
     def scalar(k):
         return v_bs(flag="c", S=S, K=k, t=T, r=R, sigma=SIGMA)
 
-    return "vollib 1.0.7", scalar, None
+    return f"vollib {_pkg_version('vollib')}", scalar, None
 
 
 def adapter_py_vollib():
@@ -170,6 +179,53 @@ def adapter_quantforge():
     return f"quantforge {qf.__version__}", scalar, vector
 
 
+def adapter_opengreeks():
+    from importlib.metadata import version as _pkg_version
+
+    from opengreeks import black_scholes as og
+
+    def scalar(k):
+        return og.black_scholes("c", S, k, T, R, SIGMA)
+
+    def vector(ks):
+        # The *_array API takes ndarrays for S/K/t/sigma and a scalar r, with
+        # no scalar broadcasting — the np.full expansion is the user-visible
+        # cost of a chain call, so it stays inside the timed region (same
+        # treatment as the quantforge adapter below).
+        n = len(ks)
+        return og.black_scholes_array("c", np.full(n, S), ks, np.full(n, T), R, np.full(n, SIGMA))
+
+    return f"opengreeks {_pkg_version('opengreeks')}", scalar, vector
+
+
+def _adapter_fast_vollib(backend):
+    from importlib.metadata import version as _pkg_version
+
+    import fast_vollib as fv
+
+    if backend == "numba":
+        import numba  # noqa: F401 — raise (=> clean skip) when the extra isn't installed
+
+    def scalar(k):
+        return fv.fast_black_scholes("c", S, k, T, R, SIGMA, return_as="numpy", backend=backend)
+
+    def vector(ks):
+        return fv.fast_black_scholes("c", S, ks, T, R, SIGMA, return_as="numpy", backend=backend)
+
+    return f"fast-vollib {_pkg_version('fast-vollib')} ({backend})", scalar, vector
+
+
+def adapter_fast_vollib_numba():
+    # The paper's CPU configuration (needs the numba extra). bench()'s
+    # discarded warmup call absorbs the one-time JIT — deliberately generous.
+    return _adapter_fast_vollib("numba")
+
+
+def adapter_fast_vollib_numpy():
+    # What a plain `pip install fast-vollib` gets: the numpy backend.
+    return _adapter_fast_vollib("numpy")
+
+
 ADAPTERS = [
     adapter_pyvolr,
     adapter_vollib,
@@ -178,17 +234,27 @@ ADAPTERS = [
     adapter_blackscholes,
     adapter_quantlib,
     adapter_quantforge,
+    adapter_opengreeks,
+    adapter_fast_vollib_numba,
+    adapter_fast_vollib_numpy,
 ]
 
 
-# Per-library cap on input size when looping scalar calls. Pure-Python libs
-# take ~200ns/call; 1M calls = 200ms, 10M = 2s — still OK. But blackscholes
+# Per-library cap on input size when looping scalar calls, matched by name
+# prefix so version bumps don't silently drop the cap. Pure-Python libs take
+# ~200ns/call; 1M calls = 200ms, 10M = 2s — still OK. But blackscholes
 # constructs a class per call (~5µs), so 10M = 50s. Cap conservatively.
+# ("vollib" does not match "py_vollib_vectorized" or "fast-vollib" — both
+# start with a different prefix.)
 SCALAR_LOOP_CAP = {
-    "blackscholes 0.2.0": 100_000,
-    "vollib 1.0.7": 1_000_000,
-    "QuantLib 1.42.1": 1_000_000,
+    "blackscholes": 100_000,
+    "vollib": 1_000_000,
+    "QuantLib": 1_000_000,
 }
+
+
+def _scalar_cap(name: str) -> int | None:
+    return next((cap for prefix, cap in SCALAR_LOOP_CAP.items() if name.startswith(prefix)), None)
 
 
 def run_bench() -> None:
@@ -212,7 +278,7 @@ def run_bench() -> None:
         timings: dict[str, float] = results.get(name, {})
 
         for n in SIZES:
-            cap = SCALAR_LOOP_CAP.get(name)
+            cap = _scalar_cap(name)
             fn: Callable[[], object]
             if vector_fn is not None:
                 ks = _strikes(n)
@@ -258,6 +324,8 @@ COMPETITOR_PALETTE: dict[str, tuple[str, str]] = {
     "QuantLib": ("#7C3AED", "#C4B5FD"),
     "vollib": ("#6C757D", "#9CA3AF"),
     "blackscholes": ("#B45309", "#FBBF24"),
+    "opengreeks": ("#0E7490", "#67E8F9"),
+    "fast-vollib": ("#BE185D", "#F472B6"),
 }
 
 
