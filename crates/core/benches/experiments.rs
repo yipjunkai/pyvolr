@@ -427,7 +427,15 @@ fn bench_price_greek_threshold(c: &mut Criterion) {
             b.iter(|| {
                 let out: Vec<f64> = (0..n)
                     .map(|i| {
-                        bsm::price(bsm::Flag::Call, 100.0, black_box(strikes[i]), 0.5, 0.05, 0.0, 0.20)
+                        bsm::price(
+                            bsm::Flag::Call,
+                            100.0,
+                            black_box(strikes[i]),
+                            0.5,
+                            0.05,
+                            0.0,
+                            0.20,
+                        )
                     })
                     .collect();
                 out
@@ -438,7 +446,15 @@ fn bench_price_greek_threshold(c: &mut Criterion) {
                 let out: Vec<f64> = (0..n)
                     .into_par_iter()
                     .map(|i| {
-                        bsm::price(bsm::Flag::Call, 100.0, black_box(strikes[i]), 0.5, 0.05, 0.0, 0.20)
+                        bsm::price(
+                            bsm::Flag::Call,
+                            100.0,
+                            black_box(strikes[i]),
+                            0.5,
+                            0.05,
+                            0.0,
+                            0.20,
+                        )
                     })
                     .collect();
                 out

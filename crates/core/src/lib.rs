@@ -123,8 +123,17 @@ macro_rules! define_price_or_greek {
                 q.len(),
                 sigma.len(),
             ])?;
-            let work =
-                |i: usize| $rustfn(Flag::from_i8(flag[i]), s[i], k[i], t[i], r[i], q[i], sigma[i]);
+            let work = |i: usize| {
+                $rustfn(
+                    Flag::from_i8(flag[i]),
+                    s[i],
+                    k[i],
+                    t[i],
+                    r[i],
+                    q[i],
+                    sigma[i],
+                )
+            };
             let out: Vec<f64> = if n >= $threshold {
                 py.detach(|| (0..n).into_par_iter().map(work).collect())
             } else {
@@ -164,11 +173,36 @@ macro_rules! define_price_or_greek {
 }
 
 define_price_or_greek!(bsm_price, bsm::price, PRICE_PARALLEL_THRESHOLD, with_flag);
-define_price_or_greek!(bsm_delta, greeks::delta, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
-define_price_or_greek!(bsm_theta, greeks::theta, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
-define_price_or_greek!(bsm_rho, greeks::rho, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
-define_price_or_greek!(bsm_gamma, greeks::gamma, SINGLE_GREEK_PARALLEL_THRESHOLD, no_flag);
-define_price_or_greek!(bsm_vega, greeks::vega, SINGLE_GREEK_PARALLEL_THRESHOLD, no_flag);
+define_price_or_greek!(
+    bsm_delta,
+    greeks::delta,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    with_flag
+);
+define_price_or_greek!(
+    bsm_theta,
+    greeks::theta,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    with_flag
+);
+define_price_or_greek!(
+    bsm_rho,
+    greeks::rho,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    with_flag
+);
+define_price_or_greek!(
+    bsm_gamma,
+    greeks::gamma,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_price_or_greek!(
+    bsm_vega,
+    greeks::vega,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
 
 // Black-76 has no `q` parameter (forward, not spot). Otherwise identical
 // macro shape to the BSM bindings above, including the `$threshold` gate.
@@ -228,12 +262,42 @@ macro_rules! define_black76 {
     };
 }
 
-define_black76!(black76_price, black76::price, PRICE_PARALLEL_THRESHOLD, with_flag);
-define_black76!(black76_delta, black76::delta, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
-define_black76!(black76_theta, black76::theta, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
-define_black76!(black76_rho, black76::rho, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
-define_black76!(black76_gamma, black76::gamma, SINGLE_GREEK_PARALLEL_THRESHOLD, no_flag);
-define_black76!(black76_vega, black76::vega, SINGLE_GREEK_PARALLEL_THRESHOLD, no_flag);
+define_black76!(
+    black76_price,
+    black76::price,
+    PRICE_PARALLEL_THRESHOLD,
+    with_flag
+);
+define_black76!(
+    black76_delta,
+    black76::delta,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    with_flag
+);
+define_black76!(
+    black76_theta,
+    black76::theta,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    with_flag
+);
+define_black76!(
+    black76_rho,
+    black76::rho,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    with_flag
+);
+define_black76!(
+    black76_gamma,
+    black76::gamma,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_black76!(
+    black76_vega,
+    black76::vega,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
 
 // Scalar fast-path twins: one `#[pyfunction]` per array endpoint, taking
 // plain f64/i8 arguments and returning bare floats — no arrays, no Vec, no
