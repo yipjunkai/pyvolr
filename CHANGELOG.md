@@ -4,6 +4,22 @@ All notable changes to pyvolr are documented in this file. This file is
 maintained by [release-please](https://github.com/googleapis/release-please)
 from conventional commits — do not edit version sections by hand.
 
+## [0.1.6](https://github.com/yipjunkai/pyvolr/compare/v0.1.5...v0.1.6) (2026-07-03)
+
+
+### Features
+
+* scalar fast path for every pricing endpoint ([#66](https://github.com/yipjunkai/pyvolr/issues/66)) ([ba77599](https://github.com/yipjunkai/pyvolr/commit/ba7759915c120abe913494a163e1ce2c50b40136))
+
+
+### Documentation
+
+* **bench:** add the IV tail-accuracy chart — throughput left, precision right ([#63](https://github.com/yipjunkai/pyvolr/issues/63)) ([ddfb237](https://github.com/yipjunkai/pyvolr/commit/ddfb23790068b27a0325ebf1b3bcd4ac87819855))
+* **bench:** refresh the scalar rows for the 0.1.6 fast path ([#67](https://github.com/yipjunkai/pyvolr/issues/67)) ([ead8b8c](https://github.com/yipjunkai/pyvolr/commit/ead8b8c85b362184f51be445e8286fc251f4c117))
+* refresh SECURITY + README, and fix the CI changes-gate ([#60](https://github.com/yipjunkai/pyvolr/issues/60)) ([721e387](https://github.com/yipjunkai/pyvolr/commit/721e3873a7f688289327351a7f90ad1aa4b2d015))
+* reposition for the vollib revival and refresh competitor benchmarks ([#62](https://github.com/yipjunkai/pyvolr/issues/62)) ([374fa2d](https://github.com/yipjunkai/pyvolr/commit/374fa2d3c1b4f39570267d065f3b55cdbbdf6e3e))
+* shrink the stale-doc surface (dirs-only tree; fold bench/README into the justfile) ([#65](https://github.com/yipjunkai/pyvolr/issues/65)) ([c7c3e56](https://github.com/yipjunkai/pyvolr/commit/c7c3e564cf3ec8d97e37fce968b9c8fade3a235d))
+
 ## [0.1.5](https://github.com/yipjunkai/pyvolr/compare/v0.1.4...v0.1.5) (2026-07-01)
 
 
