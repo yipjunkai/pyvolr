@@ -120,9 +120,13 @@ jobs:
           # Lint runs on the host runner via dtolnay/rust-toolchain, so the
           # components are still available where needed.
           CIBW_ENVIRONMENT_LINUX: 'PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN=stable'
-          # Build envs in cibuildwheel v3 no longer pre-install setuptools/wheel; we still need
-          # maturin explicitly as the build backend.
-          CIBW_BEFORE_BUILD: "pip install maturin"
+          # Build envs in cibuildwheel v3 no longer pre-install setuptools/wheel;
+          # install maturin explicitly, pinned to the exact version in uv.lock.
+          # The authoritative backend pin is pyproject's [build-system].requires
+          # (also ==1.13.3), resolved inside build isolation; pinning here too
+          # keeps the build env in lockstep so no floating maturin can feed a
+          # published wheel. Bump all three together when uv.lock's maturin moves.
+          CIBW_BEFORE_BUILD: "pip install maturin==1.13.3"
           # Test deps come from uv.lock (exported above) instead of floating
           # `pip install pytest ...`, so wheel verification at tag time cannot
           # be broken — or subverted — by an upstream release that day.
