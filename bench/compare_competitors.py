@@ -345,12 +345,9 @@ def _render(
     out: Path | None,
     *,
     theme: str,
-    metric: str,
 ):
-    """Render one themed chart.
+    """Render one themed throughput chart (options/sec, log — higher is better).
 
-    metric="time": y = wall time per call (µs, log).
-    metric="thru": y = throughput (options/sec, log) — higher is better.
     If `out` is None, returns the figure for an interactive plt.show().
     """
     import matplotlib.pyplot as plt
@@ -370,16 +367,14 @@ def _render(
     fig.patch.set_alpha(0.0)
     ax.set_facecolor("none")
 
-    # pyvolr last (drawn on top). For the time chart, order competitors
-    # slowest-at-100k first so the legend reads top-down "worst → best".
-    # For the throughput chart, fastest-at-100k first (same intent, flipped axis).
+    # pyvolr last (drawn on top). Order competitors fastest-at-100k first so
+    # the legend reads top-down "best → worst" against the throughput axis.
     def at_100k(name: str) -> float:
         return results[name].get("100000", float("inf"))
 
-    competitor_sort_sign = 1 if metric == "time" else -1
     names = sorted(
         results.keys(),
-        key=lambda n: (not n.startswith("pyvolr"), competitor_sort_sign * -at_100k(n)),
+        key=lambda n: (not n.startswith("pyvolr"), at_100k(n)),
     )
 
     # Visual emphasis on pyvolr: solid line, white-edged markers, full opacity,
@@ -391,10 +386,7 @@ def _render(
     for name in names:
         timings = results[name]
         ns = sorted(int(k) for k in timings)
-        if metric == "time":
-            ys = [timings[str(n)] * 1e6 for n in ns]
-        else:
-            ys = [n / timings[str(n)] for n in ns]
+        ys = [n / timings[str(n)] for n in ns]
         is_pyvolr = name.startswith("pyvolr")
         color = _color_for(name, theme=theme)
         if is_pyvolr:
@@ -442,14 +434,9 @@ def _render(
         labelpad=10,
         color=text_color,
     )
-    if metric == "time":
-        ylabel = "Wall time (µs, log scale)"
-        title = "Black-Scholes call pricing: wall time vs the 2026 competitor set"
-        legend_loc = "upper left"
-    else:
-        ylabel = "Throughput (options priced / sec, log scale)"
-        title = "Black-Scholes call pricing: throughput vs the 2026 competitor set"
-        legend_loc = "lower right"
+    ylabel = "Throughput (options priced / sec, log scale)"
+    title = "Black-Scholes call pricing: throughput vs the 2026 competitor set"
+    legend_loc = "lower right"
     ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color=text_color)
     ax.set_title(title, fontsize=15, fontweight="bold", pad=18, color=text_color)
 
@@ -499,22 +486,28 @@ def render_chart() -> None:
     out_dir = Path(__file__).resolve().parent.parent / "docs" / "assets"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Older runs wrote perf-competitors-{light,dark}.svg without the
-    # metric in the name; remove them so the asset set is unambiguous.
+    # Remove the un-suffixed originals (a pre-metric-suffix generator artifact,
+    # never referenced by any README) so the asset set stays unambiguous.
     for stale in ("perf-competitors-light.svg", "perf-competitors-dark.svg"):
         (out_dir / stale).unlink(missing_ok=True)
 
-    for metric in ("time", "thru"):
-        for theme in ("light", "dark"):
-            out = out_dir / f"perf-competitors-{metric}-{theme}.svg"
-            _render(results, out, theme=theme, metric=metric)
-            print(f"wrote {out}")
+    # NOTE: we intentionally do NOT touch perf-competitors-time-{light,dark}.svg.
+    # The current README dropped the wall-time chart at #63 (the IV-tail accuracy
+    # chart took its slot), so we no longer render it — but every *released*
+    # README (v0.1.0-v0.1.5) still hotlinks it from raw.githubusercontent/main.
+    # Those PyPI/GitHub pages fetch the asset at view time, so deleting it from
+    # main would 404 their left chart. The committed SVGs are frozen (0.1.5) and
+    # retained for exactly that reason; regenerate from git history if ever
+    # needed (the wall-time branch of _render was removed in the same change).
+    for theme in ("light", "dark"):
+        out = out_dir / f"perf-competitors-thru-{theme}.svg"
+        _render(results, out, theme=theme)
+        print(f"wrote {out}")
 
-    # Preview both light variants interactively in two windows.
+    # Preview the light throughput chart interactively.
     import matplotlib.pyplot as plt
 
-    _render(results, None, theme="light", metric="time")
-    _render(results, None, theme="light", metric="thru")
+    _render(results, None, theme="light")
     plt.show()
 
 

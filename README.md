@@ -38,14 +38,14 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
 </tr>
 </table>
 
-pyvolr **owns implied vol at scale** — 2× faster than fast-vollib's numba backend and 12× faster than opengreeks at 1M solves — and ties fast-vollib on the bundled five-Greeks kernel. It concedes bulk `price` throughput to fast-vollib's multithreaded numba kernels and scalar-call latency to opengreeks' dedicated scalar FFI. The right chart is why that trade is worth making: pushed deep out-of-the-money, every fast 2026 entrant starts returning **silently wrong** implied vols (a wrong-constant σ, with onset between prices of ~1e-6 and ~1e-26), while pyvolr — with the other two Let's-Be-Rational descendants, vollib and py_vollib_vectorized — stays f64-exact down to prices of 1e-215.
+pyvolr **owns implied vol at scale** — 2× faster than fast-vollib's numba backend and 12× faster than opengreeks at 1M solves — and ties fast-vollib on the bundled five-Greeks kernel. It concedes bulk `price` throughput to fast-vollib's multithreaded numba kernels; its scalar-call latency, once 20–30× behind opengreeks' dedicated FFI, closed to under 2.5× with the 0.1.6 scalar fast path (both now sub-microsecond). The right chart is why that trade is worth making: pushed deep out-of-the-money, every fast 2026 entrant starts returning **silently wrong** implied vols (a wrong-constant σ, with onset between prices of ~1e-6 and ~1e-26), while pyvolr — with the other two Let's-Be-Rational descendants, vollib and py_vollib_vectorized — stays f64-exact down to prices of 1e-215.
 
 | Workload                      |       pyvolr | fast-vollib 0.1.6 ¹ | opengreeks 0.2.0 | vollib 1.0.11 ² |
 | ----------------------------- | -----------: | ------------------: | ---------------: | --------------: |
-| `bs.price`, scalar ⁴          |       3.9 µs |               88 µs |      **0.13 µs** |          1.5 µs |
+| `bs.price`, scalar ⁴          |      0.25 µs |               88 µs |      **0.13 µs** |          1.5 µs |
 | `bs.price`, 10k strikes       |       326 µs |          **174 µs** |           223 µs |         14.7 ms |
 | `bs.price`, 1M strikes        |      31.9 ms |          **4.4 ms** |          21.9 ms |          1.53 s |
-| `bs.implied_vol`, scalar      |       4.9 µs |              156 µs |      **0.21 µs** |         13.2 µs |
+| `bs.implied_vol`, scalar      |      0.50 µs |              156 µs |      **0.21 µs** |         13.2 µs |
 | `bs.implied_vol`, 10k         |   **449 µs** |              727 µs |          3.35 ms |         97.7 ms |
 | `bs.implied_vol`, 1M          |  **27.1 ms** |             53.2 ms |           331 ms |        ≈9.7 s ³ |
 | `bs.greeks` (all 5), 10k      |       251 µs |          **191 µs** |           566 µs |         47.0 ms |
@@ -60,7 +60,7 @@ Also on the throughput chart: [`py_vollib_vectorized`](https://pypi.org/project/
 
 **Numerical agreement:** pyvolr matches every library above to f64 precision (~1e-13) on all well-posed inputs across price + 5 Greeks + IV (`bench/sanity_check_competitors.py`). The edges differ: `blackscholes` underflows deep-OTM prices to zero and `quantforge` hard-clamps Φ at ±8σ where pyvolr's `erfcx`-based cdf keeps the ~1e-50 price; the IV tail is the right chart, methodology in `bench/compare_tail_accuracy.py` (a known-σ ladder priced through pyvolr's mpmath-golden-pinned forward map).
 
-Reproduce it all with **`just all`**, or per-chart via the recipes in the [`justfile`](justfile) (needs [`just`](https://just.systems) + [`uv`](https://docs.astral.sh/uv); uv builds the pinned environments on demand). Measured on an Apple M4 Pro with pyvolr 0.1.5; competitor versions are pinned in the justfile.
+Reproduce it all with **`just all`**, or per-chart via the recipes in the [`justfile`](justfile) (needs [`just`](https://just.systems) + [`uv`](https://docs.astral.sh/uv); uv builds the pinned environments on demand). Measured on an Apple M4 Pro: scalar rows on pyvolr 0.1.6 (the scalar fast path), vector rows and both charts unchanged from 0.1.5 — the fast path leaves the vectorized and IV code paths untouched. Competitor versions are pinned in the justfile.
 
 ## 📦 Install
 
