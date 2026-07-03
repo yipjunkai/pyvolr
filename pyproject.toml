@@ -1,5 +1,10 @@
 [build-system]
-requires = ["maturin>=1.13,<2.0"]
+# Exact pin, not a range: PEP 517 build isolation resolves this fresh from PyPI
+# at wheel-build time, so a range would let "latest maturin in range on build
+# day" into the published wheels — the sole floating code-execution input to a
+# release. Keep in lockstep with uv.lock's maturin and the CIBW_BEFORE_BUILD
+# pins in release.yml / wheel-smoke.yml (all 1.13.3 today); bump them together.
+requires = ["maturin==1.13.3"]
 build-backend = "maturin"
 
 [project]
