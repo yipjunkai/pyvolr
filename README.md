@@ -38,13 +38,13 @@ bs.price("c", S=100, K=105, T=0.5, r=0.05, sigma=0.2) # 4.581680167540007
 </tr>
 </table>
 
-pyvolr **owns implied vol at scale** — 2× faster than fast-vollib's numba backend and 12× faster than opengreeks at 1M solves — and ties fast-vollib on the bundled five-Greeks kernel. It concedes bulk `price` throughput to fast-vollib's multithreaded numba kernels; its scalar-call latency, once 20–30× behind opengreeks' dedicated FFI, closed to under 2.5× with the 0.1.6 scalar fast path (both now sub-microsecond). The right chart is why that trade is worth making: pushed deep out-of-the-money, every fast 2026 entrant starts returning **silently wrong** implied vols (a wrong-constant σ, with onset between prices of ~1e-6 and ~1e-26), while pyvolr — with the other two Let's-Be-Rational descendants, vollib and py_vollib_vectorized — stays f64-exact down to prices of 1e-215.
+pyvolr **owns implied vol at scale** — 2× faster than fast-vollib's numba backend and 12× faster than opengreeks at 1M solves — and ties fast-vollib on the bundled five-Greeks kernel. Since 0.1.7 its parallel `price` path **leads bulk throughput too** — 1M strikes in ~4 ms, ahead of fast-vollib's multithreaded numba kernel and ~5× ahead of opengreeks — closing the one row it used to concede (at 10k it lands a near-tie 2nd, just behind fast-vollib's numba and ahead of opengreeks). Its scalar-call latency, once 20–30× behind opengreeks' dedicated FFI, closed to under 2.5× with the 0.1.6 scalar fast path (both now sub-microsecond). And it stays **correct in the tail** the whole time: pushed deep out-of-the-money, every fast 2026 entrant starts returning **silently wrong** implied vols (a wrong-constant σ, with onset between prices of ~1e-6 and ~1e-26), while pyvolr — with the other two Let's-Be-Rational descendants, vollib and py_vollib_vectorized — stays f64-exact down to prices of 1e-215.
 
 | Workload                      |       pyvolr | fast-vollib 0.1.6 ¹ | opengreeks 0.2.0 | vollib 1.0.11 ² |
 | ----------------------------- | -----------: | ------------------: | ---------------: | --------------: |
 | `bs.price`, scalar ⁴          |      0.25 µs |               88 µs |      **0.13 µs** |          1.5 µs |
-| `bs.price`, 10k strikes       |       326 µs |          **174 µs** |           223 µs |         14.7 ms |
-| `bs.price`, 1M strikes        |      31.9 ms |          **4.4 ms** |          21.9 ms |          1.53 s |
+| `bs.price`, 10k strikes       |       206 µs |          **174 µs** |           223 µs |         14.7 ms |
+| `bs.price`, 1M strikes        |   **4.1 ms** |              4.4 ms |          21.9 ms |          1.53 s |
 | `bs.implied_vol`, scalar      |      0.50 µs |              156 µs |      **0.21 µs** |         13.2 µs |
 | `bs.implied_vol`, 10k         |   **449 µs** |              727 µs |          3.35 ms |         97.7 ms |
 | `bs.implied_vol`, 1M          |  **27.1 ms** |             53.2 ms |           331 ms |        ≈9.7 s ³ |
@@ -54,13 +54,13 @@ pyvolr **owns implied vol at scale** — 2× faster than fast-vollib's numba bac
 ¹ The numba backend — fast-vollib's fast CPU path (a plain `pip install fast-vollib` runs its numpy backend, 5–7× slower). One-time ~0.4 s JIT warmup per function excluded.
 ² vollib (the revived `py_vollib` upstream — see [docs/why.md](docs/why.md)) is scalar-only pure Python: the migration baseline, not a vectorization competitor. pyvolr runs its workloads 45–360× faster in batch.
 ³ Extrapolated ×10 from the measured 100k-row time (scalar loop).
-⁴ pyvolr's `price` uses the normalised-Black engine — ~1-ULP into the deep-OTM tail, ~2.3× slower than the textbook `S·Φ(d1) − K·Φ(d2)` form (that is opengreeks' per-core price edge). A deliberate trade; Greeks and IV are unaffected.
+⁴ pyvolr's `price` uses the normalised-Black engine — ~1-ULP into the deep-OTM tail, ~2.3× slower per core than the textbook `S·Φ(d1) − K·Φ(d2)` form (that is opengreeks' per-core price edge, which pyvolr's rayon parallelism overtakes at scale — see the 1M row). A deliberate trade for tail accuracy; Greeks and IV are unaffected.
 
-Also on the throughput chart: [`py_vollib_vectorized`](https://pypi.org/project/py_vollib_vectorized/) (numba, unmaintained since 2021), [`blackscholes`](https://pypi.org/project/blackscholes/) (pure Python), [`QuantLib`](https://pypi.org/project/QuantLib/) (C++ core, looped scalar), and [`quantforge`](https://pypi.org/project/quantforge/) (Rust + rayon, reduced-precision `fast_erf`; unmaintained since Sep 2025). pyvolr's `implied_vol` parallelises via rayon above N≈1k (`greeks` ≥4096); `RAYON_NUM_THREADS=1` forces serial.
+Also on the throughput chart: [`py_vollib_vectorized`](https://pypi.org/project/py_vollib_vectorized/) (numba, unmaintained since 2021), [`blackscholes`](https://pypi.org/project/blackscholes/) (pure Python), [`QuantLib`](https://pypi.org/project/QuantLib/) (C++ core, looped scalar), and [`quantforge`](https://pypi.org/project/quantforge/) (Rust + rayon, reduced-precision `fast_erf`; unmaintained since Sep 2025). pyvolr parallelises via rayon above per-endpoint thresholds — `implied_vol` ≥1k, bundled `greeks` ≥4k, `price` ≥8k, single Greeks ≥16k (each gate set above its measured serial-vs-rayon break-even); `RAYON_NUM_THREADS=1` forces serial.
 
 **Numerical agreement:** pyvolr matches every library above to f64 precision (~1e-13) on all well-posed inputs across price + 5 Greeks + IV (`bench/sanity_check_competitors.py`). The edges differ: `blackscholes` underflows deep-OTM prices to zero and `quantforge` hard-clamps Φ at ±8σ where pyvolr's `erfcx`-based cdf keeps the ~1e-50 price; the IV tail is the right chart, methodology in `bench/compare_tail_accuracy.py` (a known-σ ladder priced through pyvolr's mpmath-golden-pinned forward map).
 
-Reproduce it all with **`just all`**, or per-chart via the recipes in the [`justfile`](justfile) (needs [`just`](https://just.systems) + [`uv`](https://docs.astral.sh/uv); uv builds the pinned environments on demand). Measured on an Apple M4 Pro: scalar rows on pyvolr 0.1.6 (the scalar fast path), vector rows and both charts unchanged from 0.1.5 — the fast path leaves the vectorized and IV code paths untouched. Competitor versions are pinned in the justfile.
+Reproduce it all with **`just all`**, or per-chart via the recipes in the [`justfile`](justfile) (needs [`just`](https://just.systems) + [`uv`](https://docs.astral.sh/uv); uv builds the pinned environments on demand). Measured on an Apple M4 Pro: `price` vector rows on pyvolr 0.1.7 (the parallel path), scalar rows on 0.1.6 (the scalar fast path), IV and Greeks rows and the accuracy chart unchanged from 0.1.5 (those code paths are untouched); the throughput chart's `price` curve is regenerated on the reference machine at release. Competitor versions are pinned in the justfile.
 
 ## 📦 Install
 
@@ -133,11 +133,11 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 - **Black-76 pricing** — European options on futures/forwards (`pyvolr.black76`), same vectorized API as `bs`
 - **Analytical Greeks** — delta, gamma, theta, vega, rho (with documented sign and unit conventions)
 - **Robust implied volatility** — Jäckel "Let's Be Rational" algorithm: rational-cubic initial guess plus Householder order-4 iteration converges to ~1e-13 precision in ≤2 iterations across the full no-arbitrage range
-- **Automatic parallelism on large batches** — `implied_vol` (above N≈1,000 rows) and the bundled `greeks` kernel (above N≈4,000) release the GIL and dispatch per-row work to rayon's global thread pool; set `RAYON_NUM_THREADS=1` to opt out
+- **Automatic parallelism on large batches** — every array endpoint releases the GIL and dispatches per-row work to rayon's global thread pool above its own measured threshold: `implied_vol` ≥1k rows, bundled `greeks` ≥4k, `price` ≥8k, single Greeks ≥16k (each gate sits above that endpoint's serial-vs-rayon break-even, so small calls never pay rayon's overhead); set `RAYON_NUM_THREADS=1` to opt out
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
 - **`py_vollib` drop-in shims** — `pyvolr.compat.py_vollib` mirrors the upstream module tree (including `py_vollib.black`) for one-import-line migration; `pyvolr.compat.py_vollib_vectorized` mirrors the vectorized API (`vectorized_*`, `get_all_greeks`, `price_dataframe`)
 - **Rust core, no compiler needed** — abi3 wheels for Python 3.10–3.14 × {Linux, macOS, Windows}
-- **Free-threaded Python ready** — a dedicated 3.14t wheel: with no GIL, every entry point scales across threads. On standard (GIL) builds, the large-batch `implied_vol` (≥1k rows) and bundled `greeks` (≥4k rows) kernels release the GIL while rayon works; `price` and single-Greek calls hold it
+- **Free-threaded Python ready** — a dedicated 3.14t wheel: with no GIL, every entry point scales across threads. On standard (GIL) builds, every array endpoint releases the GIL above its threshold (`implied_vol` ≥1k, bundled `greeks` ≥4k, `price` ≥8k, single Greeks ≥16k) so rayon can work while other Python threads run; below the gate, and for scalar calls, the work is too small to bother and the GIL is held
 - **Typed end-to-end** — pyright-strict library code, full type stubs for the Rust extension
 
 ## 🗺️ Coming soon
