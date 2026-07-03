@@ -54,7 +54,15 @@ pub fn price(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> 
         //   - sigma <= 0: deterministic forward.
         //   - x = ln(F/K) non-finite: F or K ≤ 0, or F/K over/underflows f64
         //     (extreme moneyness) — the option is then at its intrinsic to f64.
-        return disc_r * intrinsic(flag, forward, k);
+        //
+        // Form the discounted intrinsic as `max(0, ±(S·e^(−qT) − K·e^(−rT)))`
+        // rather than the algebraically-equal `e^(−rT)·max(0, ±(F − K))`: the
+        // split terms are each individually well-scaled, so an overflowing
+        // `forward` (or an underflowing `disc_r`) no longer collides into a
+        // `0·inf = NaN`. `.max(0.0)` also maps any residual `inf − inf` to 0, so
+        // finite inputs never yield NaN — only a genuinely overflowing true
+        // price saturates to +inf. Fuzz regression `crash-…` (r ≪ 0, σ = 0).
+        return intrinsic(flag, s * (-q * t).exp(), k * disc_r);
     }
     // Back the public pricer with the normalised-Black engine (the same ~1-ULP
     // evaluator the IV solver uses) rather than the textbook
@@ -73,7 +81,13 @@ pub fn price(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> 
     // makes put-call parity EXACT: C and P share the same `b(−|x|, s)` term, so
     // `C − P = e^(−rT)(F − K)` to the last bit.
     let s_norm = sigma * t.sqrt();
-    let sqrt_fk = (forward * k).sqrt();
+    // `√(F·K)` split as `√F·√K` rather than `√(F·K)`: the product `F·K`
+    // overflows to +inf for extreme-but-in-range notionals (e.g. S=K=1e200,
+    // where `F/K` is still finite so we reach this engine path), which would
+    // poison the price with `inf`. The split keeps each factor ≤ √f64::MAX and
+    // costs at most ~½ ULP versus the product form — far under the 1e-12 price
+    // golden bar.
+    let sqrt_fk = forward.sqrt() * k.sqrt();
     let extrinsic = disc_r * sqrt_fk * crate::iv::normalised_black_call(-x.abs(), s_norm);
     let intrinsic_disc = match flag {
         Flag::Call if x > 0.0 => disc_r * (forward - k),
@@ -237,5 +251,79 @@ mod tests {
         let forward = s * ((r - q) * t).exp();
         let expected = (-r * t).exp() * (forward - k).max(0.0);
         assert_relative_eq!(p, expected, epsilon = 1e-12);
+    }
+
+    /// Extreme-but-in-range notional where `F·K` overflows f64 while `F/K`
+    /// (hence `x = ln(F/K)`) stays finite, so the engine path at `sqrt_fk`
+    /// runs. The pre-fix `(forward * k).sqrt()` computed `√inf = inf` and
+    /// poisoned the price; the split `√F·√K` bounds each factor by `f64::MAX.sqrt()`.
+    /// Prices must stay finite with put-call parity intact.
+    #[test]
+    fn extreme_notional_engine_path_stays_finite() {
+        let (t, r, q, sigma) = (1.0, 0.05, 0.0, 0.20);
+        for &(s, k) in &[(1.0e200, 1.0e200), (1.0e180, 5.0e180), (3.0e200, 1.0e200)] {
+            let c = price(Flag::Call, s, k, t, r, q, sigma);
+            let p = price(Flag::Put, s, k, t, r, q, sigma);
+            assert!(
+                c.is_finite() && p.is_finite(),
+                "s={s:e} k={k:e}: c={c:e} p={p:e}"
+            );
+            // C − P = S·e^(−qT) − K·e^(−rT); both terms individually finite here.
+            let parity = s * (-q * t).exp() - k * (-r * t).exp();
+            assert_relative_eq!(c - p, parity, max_relative = 1e-12);
+        }
+    }
+
+    /// Degenerate (σ = 0) pricing under extreme rates that drive `disc_r` to 0
+    /// or +inf. The pre-fix `disc_r · intrinsic(F, K)` formed `0·inf`/`inf·0 =
+    /// NaN`; the split discounted-intrinsic form returns the mathematically
+    /// correct finite value.
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn degenerate_extreme_rate_is_finite_and_correct() {
+        // r ≫ 0: disc_r = e^(−rT) underflows to 0, forward = S·e^(rT) overflows
+        // to +inf ⇒ old `0·inf`. True call = max(0, S·e^(−qT) − K·e^(−rT)) = S
+        // (strike fully discounted away); true put = 0.
+        let c_hi = price(Flag::Call, 100.0, 100.0, 1.0, 800.0, 0.0, 0.0);
+        let p_hi = price(Flag::Put, 100.0, 100.0, 1.0, 800.0, 0.0, 0.0);
+        assert_eq!(c_hi, 100.0);
+        assert_eq!(p_hi, 0.0);
+        // r ≪ 0: disc_r overflows to +inf, forward underflows to 0 ⇒ old
+        // `inf·0`. True call = max(0, 100 − K·e^(−rT)) = max(0, 100 − inf) = 0.
+        let c_lo = price(Flag::Call, 100.0, 100.0, 1.0, -800.0, 0.0, 0.0);
+        assert_eq!(c_lo, 0.0);
+    }
+
+    /// "Finite in → finite out": across a broad grid of extreme-but-finite
+    /// inputs (rates bounded so `e^(±rT)` itself stays finite), `price` must
+    /// never return NaN and must stay non-negative. Guards the two overflow
+    /// corners above from regressing on inputs the targeted cases don't name.
+    #[test]
+    fn no_nan_or_negative_on_finite_inputs() {
+        let spots = [1.0e-200, 1.0e-6, 1.0, 100.0, 1.0e6, 1.0e200];
+        let strikes = [1.0e-200, 1.0e-6, 1.0, 100.0, 1.0e6, 1.0e200];
+        let times = [1.0e-8, 1.0e-3, 1.0, 30.0];
+        let rates = [-5.0, -0.05, 0.0, 0.05, 5.0];
+        let divs = [0.0, 0.05, 5.0];
+        let sigmas = [0.0, 1.0e-8, 0.2, 5.0];
+        for &s in &spots {
+            for &k in &strikes {
+                for &t in &times {
+                    for &r in &rates {
+                        for &q in &divs {
+                            for &sigma in &sigmas {
+                                for flag in [Flag::Call, Flag::Put] {
+                                    let v = price(flag, s, k, t, r, q, sigma);
+                                    assert!(
+                                        !v.is_nan() && v >= 0.0,
+                                        "bad price {v:e} at {flag:?} s={s:e} k={k:e} t={t:e} r={r} q={q} sig={sigma}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

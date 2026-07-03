@@ -802,6 +802,9 @@ mod lbr {
 /// Solve for implied volatility given a market price.
 ///
 /// Returns `NaN` if:
+///   - any of `s`, `k`, `t`, `r`, `q` is non-finite (`NaN`/`±inf`) — a `NaN`
+///     otherwise slips past every `<= 0` comparison below (all comparisons
+///     against `NaN` are false) and propagates into a garbage σ,
 ///   - `t <= 0`,
 ///   - `s <= 0` or `k <= 0`,
 ///   - the target price is not finite or is negative,
@@ -811,7 +814,13 @@ mod lbr {
 ///     hard-capped at `MAX_ITER` but always returns a finite `s` — it does not
 ///     signal non-convergence, since ≤ 2 steps suffice across all interior β.
 pub fn solve(target_price: f64, flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64) -> f64 {
-    if t <= 0.0 || s <= 0.0 || k <= 0.0 || !target_price.is_finite() || target_price < 0.0 {
+    if !(s.is_finite() && k.is_finite() && t.is_finite() && r.is_finite() && q.is_finite())
+        || t <= 0.0
+        || s <= 0.0
+        || k <= 0.0
+        || !target_price.is_finite()
+        || target_price < 0.0
+    {
         return f64::NAN;
     }
 
@@ -831,8 +840,11 @@ pub fn solve(target_price: f64, flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f
 
     // Convert to normalised inputs:
     //   β = undiscounted_price / √(F·K),   x = ln(F/K),   q_sign = ±1.
+    // `√(F·K)` is split as `√F·√K` so `F·K` cannot overflow to +inf for
+    // extreme-but-in-range notionals (which would collapse β to 0 and return a
+    // spurious σ = 0); see the matching note in `bsm::price`.
     let undiscounted = target_price / disc_r;
-    let beta = undiscounted / (forward * k).sqrt();
+    let beta = undiscounted / (forward.sqrt() * k.sqrt());
     let x = (forward / k).ln();
     let q_sign = match flag {
         Flag::Call => 1.0,
@@ -1111,5 +1123,46 @@ mod tests {
     fn zero_time_returns_nan() {
         let iv = solve(5.0, Flag::Call, 100.0, 100.0, 0.0, 0.05, 0.0);
         assert!(iv.is_nan());
+    }
+
+    /// A `NaN`/`±inf` in any of `s`, `k`, `t`, `r`, `q` must return `NaN`, not a
+    /// garbage σ. Pre-fix, `NaN` slipped past the `<= 0` guards (NaN compares
+    /// false) and `±inf` in `r`/`q` was never checked at all.
+    #[test]
+    fn solve_non_finite_inputs_return_nan() {
+        let p = price(Flag::Call, 100.0, 100.0, 1.0, 0.05, 0.0, 0.2);
+        for &bad in &[f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(
+                solve(p, Flag::Call, bad, 100.0, 1.0, 0.05, 0.0).is_nan(),
+                "s={bad}"
+            );
+            assert!(
+                solve(p, Flag::Call, 100.0, bad, 1.0, 0.05, 0.0).is_nan(),
+                "k={bad}"
+            );
+            assert!(
+                solve(p, Flag::Call, 100.0, 100.0, bad, 0.05, 0.0).is_nan(),
+                "t={bad}"
+            );
+            assert!(
+                solve(p, Flag::Call, 100.0, 100.0, 1.0, bad, 0.0).is_nan(),
+                "r={bad}"
+            );
+            assert!(
+                solve(p, Flag::Call, 100.0, 100.0, 1.0, 0.05, bad).is_nan(),
+                "q={bad}"
+            );
+        }
+    }
+
+    /// S=K=1e200: `F·K` overflows f64, so the pre-fix `(F·K).sqrt()` drove β→0
+    /// and `solve` returned a spurious σ=0. The split `√F·√K` recovers σ.
+    #[test]
+    fn iv_extreme_notional_roundtrip() {
+        let (s, k, t, r, q, sigma) = (1.0e200, 1.0e200, 1.0, 0.05, 0.0, 0.20);
+        let p = price(Flag::Call, s, k, t, r, q, sigma);
+        assert!(p.is_finite() && p > 0.0, "price not finite/positive: {p:e}");
+        let iv = solve(p, Flag::Call, s, k, t, r, q);
+        assert_relative_eq!(iv, sigma, max_relative = 1e-9);
     }
 }
