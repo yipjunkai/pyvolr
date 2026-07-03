@@ -245,9 +245,13 @@ fn bench_bsm_price_flag_dispatch(c: &mut Criterion) {
 /// (a) the per-row cost vs rayon overhead break-even point, and
 /// (b) the N-core saturation ceiling at large N.
 ///
-/// The data here drove the threshold choices in `lib.rs`:
-/// `PARALLEL_THRESHOLD = 1024` for IV, `GREEKS_PARALLEL_THRESHOLD = 4096`
-/// for bundled Greeks; pricing was not gated (break-even too high).
+/// The data here drove the IV and bundled-Greeks threshold choices in
+/// `lib.rs`: `PARALLEL_THRESHOLD = 1024` for IV, `GREEKS_PARALLEL_THRESHOLD =
+/// 4096` for bundled Greeks. Pricing and the single Greeks were originally
+/// left ungated (break-even too high to be worth it absent a trigger); the
+/// 2026 competitor pressure on large-N `price` unparked them in 0.1.7, with
+/// their (higher) crossovers measured by `bench_price_greek_threshold` below
+/// and gated via `PRICE_PARALLEL_THRESHOLD` / `SINGLE_GREEK_PARALLEL_THRESHOLD`.
 #[allow(clippy::too_many_lines)] // three sub-benches × 4 sizes × serial/rayon arms
 fn bench_parallel_dispatch_experiment(c: &mut Criterion) {
     let sizes: [usize; 4] = [100, 1_000, 10_000, 100_000];
@@ -402,10 +406,79 @@ fn bench_parallel_dispatch_experiment(c: &mut Criterion) {
     greeks_group.finish();
 }
 
+/// Focused serial-vs-rayon crossover for the single-output endpoints that
+/// `lib.rs` gates with `PRICE_PARALLEL_THRESHOLD` (0.1.7): `bsm::price` and
+/// the cheapest single Greek, `greeks::vega` (no cdf, just one pdf — the
+/// binding constraint for a shared threshold, since a cheaper per-row cost
+/// pushes the break-even to a *higher* N). Fine-grained sizes bracket the
+/// crossover so the production threshold can be set just above the cheapest
+/// endpoint's break-even, mirroring how `bench_parallel_dispatch_experiment`
+/// set the IV/Greeks gates. Run: `cargo bench --bench experiments -- threshold`.
+fn bench_price_greek_threshold(c: &mut Criterion) {
+    let sizes: [usize; 8] = [512, 1_024, 1_536, 2_048, 3_072, 4_096, 6_144, 8_192];
+
+    let mut price_group = c.benchmark_group("threshold/bsm_price");
+    for &n in &sizes {
+        let strikes: Vec<f64> = (0..n)
+            .map(|i| 80.0 + 40.0 * (i as f64) / (n as f64))
+            .collect();
+        price_group.throughput(Throughput::Elements(n as u64));
+        price_group.bench_function(BenchmarkId::new("serial", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .map(|i| {
+                        bsm::price(bsm::Flag::Call, 100.0, black_box(strikes[i]), 0.5, 0.05, 0.0, 0.20)
+                    })
+                    .collect();
+                out
+            });
+        });
+        price_group.bench_function(BenchmarkId::new("rayon", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .into_par_iter()
+                    .map(|i| {
+                        bsm::price(bsm::Flag::Call, 100.0, black_box(strikes[i]), 0.5, 0.05, 0.0, 0.20)
+                    })
+                    .collect();
+                out
+            });
+        });
+    }
+    price_group.finish();
+
+    let mut vega_group = c.benchmark_group("threshold/greeks_vega");
+    for &n in &sizes {
+        let strikes: Vec<f64> = (0..n)
+            .map(|i| 80.0 + 40.0 * (i as f64) / (n as f64))
+            .collect();
+        vega_group.throughput(Throughput::Elements(n as u64));
+        vega_group.bench_function(BenchmarkId::new("serial", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .map(|i| greeks::vega(100.0, black_box(strikes[i]), 0.5, 0.05, 0.0, 0.20))
+                    .collect();
+                out
+            });
+        });
+        vega_group.bench_function(BenchmarkId::new("rayon", n), |b| {
+            b.iter(|| {
+                let out: Vec<f64> = (0..n)
+                    .into_par_iter()
+                    .map(|i| greeks::vega(100.0, black_box(strikes[i]), 0.5, 0.05, 0.0, 0.20))
+                    .collect();
+                out
+            });
+        });
+    }
+    vega_group.finish();
+}
+
 criterion_group!(
     experiments,
     bench_cdf_branch_experiment,
     bench_bsm_price_flag_dispatch,
     bench_parallel_dispatch_experiment,
+    bench_price_greek_threshold,
 );
 criterion_main!(experiments);

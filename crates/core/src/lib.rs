@@ -40,6 +40,27 @@ const PARALLEL_THRESHOLD: usize = 1024;
 /// ensure parallel always wins by a meaningful margin at the gate.
 const GREEKS_PARALLEL_THRESHOLD: usize = 4096;
 
+/// `price` runs the normalised-Black engine (`~1`-ULP, erfcx-based) — heavier
+/// per row than a textbook `Φ` price but still cheap (~25 ns/row), so its
+/// serial-vs-rayon break-even sits high. Measured crossover on Apple M4 Pro:
+/// serial wins through N=4,096, rayon wins from N=6,144 (break-even ~5,000);
+/// gate set above that with margin. Both benchmarked competitor price rows
+/// (10k, 1M) are ≥ this, so they take the parallel path; sub-threshold calls
+/// stay serial with no rayon-overhead regression. Bench: the `threshold/`
+/// group in `crates/core/benches/experiments.rs`.
+const PRICE_PARALLEL_THRESHOLD: usize = 8192;
+
+/// Single Greeks (`delta`/`gamma`/`vega`/`theta`/`rho` individually) are the
+/// cheapest endpoints in the suite — the no-cdf ones (`gamma`/`vega`) run
+/// ~5 ns/row — so their break-even is the highest. Measured: `greeks::vega`
+/// serial still beats rayon at N=8,192 (crossover ~13,000); gate set above
+/// that. This is deliberately higher than `GREEKS_PARALLEL_THRESHOLD` because
+/// a single Greek does a fraction of the bundled five-Greek work per row, so
+/// it needs more rows before rayon's fixed overhead pays off. The bundled
+/// `greeks()` path (5 outputs/row) keeps its own lower gate. Above the gate
+/// the parallel path is both faster and GIL-releasing; below it stays serial.
+const SINGLE_GREEK_PARALLEL_THRESHOLD: usize = 16_384;
+
 /// Return type of `bsm_greeks` / `black76_greeks`: `(delta, gamma, vega, theta, rho)`.
 type GreeksTuple<'py> = (
     Bound<'py, PyArray1<f64>>,
@@ -64,8 +85,16 @@ fn check_len(lens: &[usize]) -> PyResult<usize> {
     Ok(n)
 }
 
+// `$threshold` is the batch size at or above which the endpoint releases the
+// GIL (`py.detach`) and dispatches per-row work to rayon; below it the call
+// stays serial. `price` and the single Greeks have very different per-row
+// costs, so each invocation passes its own measured gate (see the
+// `*_PARALLEL_THRESHOLD` constants). The serial closure and the parallel
+// closure are the same `work`, so outputs are bit-identical across the gate
+// (only the scheduling differs) — pinned by the `TestParallelDispatch`
+// suites on the Python side.
 macro_rules! define_price_or_greek {
-    ($pyname:ident, $rustfn:path, with_flag) => {
+    ($pyname:ident, $rustfn:path, $threshold:expr, with_flag) => {
         #[pyfunction]
         #[allow(clippy::too_many_arguments)]
         fn $pyname<'py>(
@@ -94,23 +123,17 @@ macro_rules! define_price_or_greek {
                 q.len(),
                 sigma.len(),
             ])?;
-            let out: Vec<f64> = (0..n)
-                .map(|i| {
-                    $rustfn(
-                        Flag::from_i8(flag[i]),
-                        s[i],
-                        k[i],
-                        t[i],
-                        r[i],
-                        q[i],
-                        sigma[i],
-                    )
-                })
-                .collect();
+            let work =
+                |i: usize| $rustfn(Flag::from_i8(flag[i]), s[i], k[i], t[i], r[i], q[i], sigma[i]);
+            let out: Vec<f64> = if n >= $threshold {
+                py.detach(|| (0..n).into_par_iter().map(work).collect())
+            } else {
+                (0..n).map(work).collect()
+            };
             Ok(out.into_pyarray(py))
         }
     };
-    ($pyname:ident, $rustfn:path, no_flag) => {
+    ($pyname:ident, $rustfn:path, $threshold:expr, no_flag) => {
         #[pyfunction]
         #[allow(clippy::too_many_arguments)]
         fn $pyname<'py>(
@@ -129,25 +152,28 @@ macro_rules! define_price_or_greek {
             let q = q.as_slice()?;
             let sigma = sigma.as_slice()?;
             let n = check_len(&[s.len(), k.len(), t.len(), r.len(), q.len(), sigma.len()])?;
-            let out: Vec<f64> = (0..n)
-                .map(|i| $rustfn(s[i], k[i], t[i], r[i], q[i], sigma[i]))
-                .collect();
+            let work = |i: usize| $rustfn(s[i], k[i], t[i], r[i], q[i], sigma[i]);
+            let out: Vec<f64> = if n >= $threshold {
+                py.detach(|| (0..n).into_par_iter().map(work).collect())
+            } else {
+                (0..n).map(work).collect()
+            };
             Ok(out.into_pyarray(py))
         }
     };
 }
 
-define_price_or_greek!(bsm_price, bsm::price, with_flag);
-define_price_or_greek!(bsm_delta, greeks::delta, with_flag);
-define_price_or_greek!(bsm_theta, greeks::theta, with_flag);
-define_price_or_greek!(bsm_rho, greeks::rho, with_flag);
-define_price_or_greek!(bsm_gamma, greeks::gamma, no_flag);
-define_price_or_greek!(bsm_vega, greeks::vega, no_flag);
+define_price_or_greek!(bsm_price, bsm::price, PRICE_PARALLEL_THRESHOLD, with_flag);
+define_price_or_greek!(bsm_delta, greeks::delta, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
+define_price_or_greek!(bsm_theta, greeks::theta, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
+define_price_or_greek!(bsm_rho, greeks::rho, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
+define_price_or_greek!(bsm_gamma, greeks::gamma, SINGLE_GREEK_PARALLEL_THRESHOLD, no_flag);
+define_price_or_greek!(bsm_vega, greeks::vega, SINGLE_GREEK_PARALLEL_THRESHOLD, no_flag);
 
 // Black-76 has no `q` parameter (forward, not spot). Otherwise identical
-// macro shape to the BSM bindings above.
+// macro shape to the BSM bindings above, including the `$threshold` gate.
 macro_rules! define_black76 {
-    ($pyname:ident, $rustfn:path, with_flag) => {
+    ($pyname:ident, $rustfn:path, $threshold:expr, with_flag) => {
         #[pyfunction]
         #[allow(clippy::too_many_arguments)]
         fn $pyname<'py>(
@@ -166,13 +192,16 @@ macro_rules! define_black76 {
             let r = r.as_slice()?;
             let sigma = sigma.as_slice()?;
             let n = check_len(&[flag.len(), f.len(), k.len(), t.len(), r.len(), sigma.len()])?;
-            let out: Vec<f64> = (0..n)
-                .map(|i| $rustfn(Flag::from_i8(flag[i]), f[i], k[i], t[i], r[i], sigma[i]))
-                .collect();
+            let work = |i: usize| $rustfn(Flag::from_i8(flag[i]), f[i], k[i], t[i], r[i], sigma[i]);
+            let out: Vec<f64> = if n >= $threshold {
+                py.detach(|| (0..n).into_par_iter().map(work).collect())
+            } else {
+                (0..n).map(work).collect()
+            };
             Ok(out.into_pyarray(py))
         }
     };
-    ($pyname:ident, $rustfn:path, no_flag) => {
+    ($pyname:ident, $rustfn:path, $threshold:expr, no_flag) => {
         #[pyfunction]
         fn $pyname<'py>(
             py: Python<'py>,
@@ -188,20 +217,23 @@ macro_rules! define_black76 {
             let r = r.as_slice()?;
             let sigma = sigma.as_slice()?;
             let n = check_len(&[f.len(), k.len(), t.len(), r.len(), sigma.len()])?;
-            let out: Vec<f64> = (0..n)
-                .map(|i| $rustfn(f[i], k[i], t[i], r[i], sigma[i]))
-                .collect();
+            let work = |i: usize| $rustfn(f[i], k[i], t[i], r[i], sigma[i]);
+            let out: Vec<f64> = if n >= $threshold {
+                py.detach(|| (0..n).into_par_iter().map(work).collect())
+            } else {
+                (0..n).map(work).collect()
+            };
             Ok(out.into_pyarray(py))
         }
     };
 }
 
-define_black76!(black76_price, black76::price, with_flag);
-define_black76!(black76_delta, black76::delta, with_flag);
-define_black76!(black76_theta, black76::theta, with_flag);
-define_black76!(black76_rho, black76::rho, with_flag);
-define_black76!(black76_gamma, black76::gamma, no_flag);
-define_black76!(black76_vega, black76::vega, no_flag);
+define_black76!(black76_price, black76::price, PRICE_PARALLEL_THRESHOLD, with_flag);
+define_black76!(black76_delta, black76::delta, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
+define_black76!(black76_theta, black76::theta, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
+define_black76!(black76_rho, black76::rho, SINGLE_GREEK_PARALLEL_THRESHOLD, with_flag);
+define_black76!(black76_gamma, black76::gamma, SINGLE_GREEK_PARALLEL_THRESHOLD, no_flag);
+define_black76!(black76_vega, black76::vega, SINGLE_GREEK_PARALLEL_THRESHOLD, no_flag);
 
 // Scalar fast-path twins: one `#[pyfunction]` per array endpoint, taking
 // plain f64/i8 arguments and returning bare floats — no arrays, no Vec, no

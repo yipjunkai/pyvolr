@@ -256,3 +256,48 @@ class TestParallelDispatch:
         np.testing.assert_allclose(
             g["rho"], bs.rho(flag, S=S, K=K, T=T, r=r, sigma=sigma), rtol=1e-14
         )
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_single_greeks_parallel_match_serial(self, flag: str) -> None:
+        # The *individual* Greek endpoints (bs.delta/gamma/vega/theta/rho) gate
+        # at SINGLE_GREEK_PARALLEL_THRESHOLD (16384) — higher than the bundled
+        # gate because one Greek does a fraction of the five-Greek per-row work,
+        # so rayon's fixed overhead pays off at a larger N. Same tile trick as
+        # `test_bsm.TestParallelDispatch`: a diverse pattern computed serially
+        # (below the gate), tiled past it, must match the parallel result to the
+        # bit (independent rows, identical kernel).
+        pk = np.linspace(20.0, 500.0, 384)
+        reps = 48  # 384 * 48 = 18432 >= SINGLE_GREEK_PARALLEL_THRESHOLD (16384)
+        bk = np.tile(pk, reps)
+        S, T, r, sigma = 100.0, 0.5, 0.05, 0.20
+
+        def check(name: str, ref: np.ndarray, got: np.ndarray) -> None:
+            np.testing.assert_array_equal(
+                got, np.tile(ref, reps), err_msg=f"{name} parallel != serial (flag={flag})"
+            )
+
+        check(
+            "delta",
+            bs.delta(flag, S=S, K=pk, T=T, r=r, sigma=sigma),
+            bs.delta(flag, S=S, K=bk, T=T, r=r, sigma=sigma),
+        )
+        check(
+            "theta",
+            bs.theta(flag, S=S, K=pk, T=T, r=r, sigma=sigma),
+            bs.theta(flag, S=S, K=bk, T=T, r=r, sigma=sigma),
+        )
+        check(
+            "rho",
+            bs.rho(flag, S=S, K=pk, T=T, r=r, sigma=sigma),
+            bs.rho(flag, S=S, K=bk, T=T, r=r, sigma=sigma),
+        )
+        check(
+            "gamma",
+            bs.gamma(S=S, K=pk, T=T, r=r, sigma=sigma),
+            bs.gamma(S=S, K=bk, T=T, r=r, sigma=sigma),
+        )
+        check(
+            "vega",
+            bs.vega(S=S, K=pk, T=T, r=r, sigma=sigma),
+            bs.vega(S=S, K=bk, T=T, r=r, sigma=sigma),
+        )
