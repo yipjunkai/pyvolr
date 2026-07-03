@@ -137,3 +137,35 @@ class TestEdgeCases:
         # Should be very close to S - K*exp(-rT)
         expected = 1000 - 100 * np.exp(-0.05 * 0.01)
         assert p == pytest.approx(expected, rel=1e-6)
+
+
+class TestParallelDispatch:
+    """Exercise the rayon-parallel branch of `bsm_price` (at/above N=8192).
+
+    Since 0.1.7 the `price` array endpoint releases the GIL and dispatches
+    per-row work to rayon at or above `PRICE_PARALLEL_THRESHOLD`
+    (`crates/core/src/lib.rs`); below it the call stays serial. Each output
+    row is computed independently by the identical kernel, so the parallel
+    path is *bit-identical* to serial — only the scheduling differs.
+
+    The tile trick pins that: a small, diverse pattern priced serially (its
+    length is below the gate), then tiled past the gate. The tiled call takes
+    the parallel path and must equal the tiled serial reference *exactly*.
+    Parametrized over flag (the put arm of the normalised-Black split adds a
+    different discounted-intrinsic term) and the K range spans deep-ITM to
+    deep-OTM so the erfcx tail is exercised under parallel dispatch too.
+    """
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_price_parallel_matches_serial(self, flag: str) -> None:
+        pattern_k = np.linspace(20.0, 500.0, 384)  # 384 < PRICE_PARALLEL_THRESHOLD
+        ref = bs.price(flag, S=100.0, K=pattern_k, T=0.5, r=0.05, sigma=0.20)
+        assert isinstance(ref, np.ndarray)
+        assert ref.shape == (384,)
+        reps = 40  # 384 * 40 = 15360 >= PRICE_PARALLEL_THRESHOLD (8192)
+        big_k = np.tile(pattern_k, reps)
+        got = bs.price(flag, S=100.0, K=big_k, T=0.5, r=0.05, sigma=0.20)
+        assert isinstance(got, np.ndarray)
+        assert got.shape == (384 * reps,)
+        # Bit-identical: independent rows, same kernel, scheduling aside.
+        np.testing.assert_array_equal(got, np.tile(ref, reps))

@@ -213,14 +213,65 @@ class TestPrecisionCorners:
 
 
 class TestParallelDispatch:
-    """Exercise the rayon-parallel branch of `black76_greeks` (above N=4096)
-    and `black76_iv` (above N=1024).
+    """Exercise the rayon-parallel branches of the Black-76 array endpoints:
+    `black76_greeks` (above N=4096), `black76_iv` (above N=1024), and — since
+    0.1.7 — `black76_price` (above N=8192) and the single Greeks (above
+    N=16384).
 
-    Mirrors the BSM tests in `test_greeks.py` / `test_iv.py`: the
-    Rust-level parity (`black76::tests::all_matches_individual_at_grid`)
-    covers `black76::all` itself; these tests cover the PyO3 dispatch +
-    tuple-unzip path at the FFI boundary, for both call and put flags.
+    Mirrors the BSM tests in `test_greeks.py` / `test_iv.py` / `test_bsm.py`:
+    the Rust-level parity (`black76::tests::all_matches_individual_at_grid`)
+    covers `black76::all` itself; these tests cover the PyO3 dispatch path at
+    the FFI boundary, for both call and put flags. `price`/single-Greek rows
+    are computed independently, so the parallel path is bit-identical to
+    serial (tile trick: diverse pattern serially, tiled past the gate).
     """
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_price_parallel_matches_serial(self, flag: str) -> None:
+        pk = np.linspace(20.0, 500.0, 384)  # 384 < PRICE_PARALLEL_THRESHOLD
+        ref = black76.price(flag, F=100.0, K=pk, T=0.5, r=0.05, sigma=0.20)
+        reps = 40  # 384 * 40 = 15360 >= PRICE_PARALLEL_THRESHOLD (8192)
+        bk = np.tile(pk, reps)
+        got = black76.price(flag, F=100.0, K=bk, T=0.5, r=0.05, sigma=0.20)
+        np.testing.assert_array_equal(got, np.tile(ref, reps))
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_single_greeks_parallel_match_serial(self, flag: str) -> None:
+        pk = np.linspace(20.0, 500.0, 384)
+        reps = 48  # 384 * 48 = 18432 >= SINGLE_GREEK_PARALLEL_THRESHOLD (16384)
+        bk = np.tile(pk, reps)
+        F, T, r, sigma = 100.0, 0.5, 0.05, 0.20
+
+        def check(name: str, ref: np.ndarray, got: np.ndarray) -> None:
+            np.testing.assert_array_equal(
+                got, np.tile(ref, reps), err_msg=f"{name} parallel != serial (flag={flag})"
+            )
+
+        check(
+            "delta",
+            black76.delta(flag, F=F, K=pk, T=T, r=r, sigma=sigma),
+            black76.delta(flag, F=F, K=bk, T=T, r=r, sigma=sigma),
+        )
+        check(
+            "theta",
+            black76.theta(flag, F=F, K=pk, T=T, r=r, sigma=sigma),
+            black76.theta(flag, F=F, K=bk, T=T, r=r, sigma=sigma),
+        )
+        check(
+            "rho",
+            black76.rho(flag, F=F, K=pk, T=T, r=r, sigma=sigma),
+            black76.rho(flag, F=F, K=bk, T=T, r=r, sigma=sigma),
+        )
+        check(
+            "gamma",
+            black76.gamma(F=F, K=pk, T=T, r=r, sigma=sigma),
+            black76.gamma(F=F, K=bk, T=T, r=r, sigma=sigma),
+        )
+        check(
+            "vega",
+            black76.vega(F=F, K=pk, T=T, r=r, sigma=sigma),
+            black76.vega(F=F, K=bk, T=T, r=r, sigma=sigma),
+        )
 
     @pytest.mark.parametrize("flag", ["c", "p"])
     def test_greeks_above_threshold_matches_individual(self, flag: str) -> None:
