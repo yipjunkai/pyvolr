@@ -42,7 +42,7 @@ jobs:
           # Both the PR head and the base ref's python/ tree are needed.
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: "3.12"
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -51,17 +51,18 @@ jobs:
 
       # Build the extension once, from the PR head. maturin develop drops the
       # .so inside python/pyvolr/ (untracked), so the base-ref checkout below
-      # leaves it in place and both wrappers drive identical kernels. The
-      # maturin pin range mirrors pyproject's [build-system] requires.
+      # leaves it in place and both wrappers drive identical kernels. maturin
+      # comes from the dev extra, installed hash-verified from uv.lock (same as
+      # ci.yml, and Dependabot's uv mover keeps it current); --no-install-project
+      # leaves the project itself for maturin develop, and the later `uv run
+      # --no-sync`s reuse this env without re-syncing.
       - name: Build extension (PR head)
         run: |
-          python -m venv .venv-perf
-          .venv-perf/bin/pip install "maturin>=1.13,<2.0"
-          source .venv-perf/bin/activate
-          maturin develop --release
+          uv sync --locked --extra dev --no-install-project
+          uv run --no-sync maturin develop --release
 
       - name: Measure (PR head)
-        run: .venv-perf/bin/python .github/scripts/check_python_perf.py measure /tmp/head.json
+        run: uv run --no-sync python .github/scripts/check_python_perf.py measure /tmp/head.json
 
       # Swap only the wrapper to the base ref and re-measure on the same
       # extension. continue-on-error mirrors perf.yml's base bench: a base
@@ -76,7 +77,7 @@ jobs:
           set -e
           git fetch origin "$BASE_REF" --depth=1
           git checkout -f "origin/$BASE_REF" -- python/pyvolr
-          .venv-perf/bin/python .github/scripts/check_python_perf.py measure /tmp/base.json
+          uv run --no-sync python .github/scripts/check_python_perf.py measure /tmp/base.json
 
       # Return the working tree to the PR head so later steps (and the
       # comparator script itself) see the code under review.
@@ -87,5 +88,5 @@ jobs:
       # Bootstrap runs (no /tmp/base.json) print a notice and exit 0.
       - name: Compare
         run: >-
-          .venv-perf/bin/python .github/scripts/check_python_perf.py
+          uv run --no-sync python .github/scripts/check_python_perf.py
           compare /tmp/base.json /tmp/head.json "$PYTHON_PERF_MAX_RATIO"
