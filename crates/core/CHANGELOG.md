@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/yipjunkai/pyvolr/compare/v0.1.5...v0.1.6) (2026-07-03)
+
+
+### Features
+
+* scalar fast path for every pricing endpoint ([#66](https://github.com/yipjunkai/pyvolr/issues/66)) ([ba77599](https://github.com/yipjunkai/pyvolr/commit/ba7759915c120abe913494a163e1ce2c50b40136))
+
 ## [0.1.5](https://github.com/yipjunkai/pyvolr/compare/v0.1.4...v0.1.5) (2026-07-01)
 
 
