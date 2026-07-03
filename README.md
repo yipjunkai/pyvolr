@@ -43,8 +43,8 @@ pyvolr **owns implied vol at scale** — 2× faster than fast-vollib's numba bac
 | Workload                      |       pyvolr | fast-vollib 0.1.6 ¹ | opengreeks 0.2.0 | vollib 1.0.11 ² |
 | ----------------------------- | -----------: | ------------------: | ---------------: | --------------: |
 | `bs.price`, scalar ⁴          |      0.25 µs |               88 µs |      **0.13 µs** |          1.5 µs |
-| `bs.price`, 10k strikes       |       206 µs |          **174 µs** |           223 µs |         14.7 ms |
-| `bs.price`, 1M strikes        |   **4.1 ms** |              4.4 ms |          21.9 ms |          1.53 s |
+| `bs.price`, 10k strikes       |       189 µs |          **174 µs** |           223 µs |         14.7 ms |
+| `bs.price`, 1M strikes        |   **4.2 ms** |              4.4 ms |          21.9 ms |          1.53 s |
 | `bs.implied_vol`, scalar      |      0.50 µs |              156 µs |      **0.21 µs** |         13.2 µs |
 | `bs.implied_vol`, 10k         |   **449 µs** |              727 µs |          3.35 ms |         97.7 ms |
 | `bs.implied_vol`, 1M          |  **27.1 ms** |             53.2 ms |           331 ms |        ≈9.7 s ³ |
@@ -60,7 +60,7 @@ Also on the throughput chart: [`py_vollib_vectorized`](https://pypi.org/project/
 
 **Numerical agreement:** pyvolr matches every library above to f64 precision (~1e-13) on all well-posed inputs across price + 5 Greeks + IV (`bench/sanity_check_competitors.py`). The edges differ: `blackscholes` underflows deep-OTM prices to zero and `quantforge` hard-clamps Φ at ±8σ where pyvolr's `erfcx`-based cdf keeps the ~1e-50 price; the IV tail is the right chart, methodology in `bench/compare_tail_accuracy.py` (a known-σ ladder priced through pyvolr's mpmath-golden-pinned forward map).
 
-Reproduce it all with **`just all`**, or per-chart via the recipes in the [`justfile`](justfile) (needs [`just`](https://just.systems) + [`uv`](https://docs.astral.sh/uv); uv builds the pinned environments on demand). Measured on an Apple M4 Pro: `price` vector rows on pyvolr 0.1.7 (the parallel path), scalar rows on 0.1.6 (the scalar fast path), IV and Greeks rows and the accuracy chart unchanged from 0.1.5 (those code paths are untouched); the throughput chart's `price` curve is regenerated on the reference machine at release. Competitor versions are pinned in the justfile.
+Reproduce it all with **`just all`**, or per-chart via the recipes in the [`justfile`](justfile) (needs [`just`](https://just.systems) + [`uv`](https://docs.astral.sh/uv); uv builds the pinned environments on demand). Measured on an Apple M4 Pro: `price` vector rows on pyvolr 0.1.7 (the parallel path), scalar rows on 0.1.6 (the scalar fast path), IV and Greeks rows and the accuracy chart unchanged from 0.1.5 (those code paths are untouched); the throughput chart is regenerated for the 0.1.7 parallel `price`. Competitor versions are pinned in the justfile.
 
 ## 📦 Install
 
