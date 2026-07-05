@@ -6,6 +6,17 @@
 //! `erfcx` and `inverse_cdf` are needed by the "Let's Be Rational" IV solver
 //! (Jäckel, 2015) — `erfcx` for stable normalised-Black evaluation in the deep
 //! out-of-the-money tail, `inverse_cdf` for the rational-cubic initial guess.
+//!
+//! **Why the pinned `libm` crate:** `erf`/`erfc` come from the pure-Rust `libm`
+//! crate rather than the platform libm so the tail is bit-identical across
+//! macOS/Linux/Windows. `erfc` is the weakest primitive under the ~1-ULP bar
+//! (the crate guarantees only 4 ULP), so the dependency is pinned to an exact
+//! version (see `crates/core/Cargo.toml`) and re-validated on any deliberate
+//! bump by the dense `erfcx` goldens in `erfcx_dense_direct_path_goldens`. NB
+//! glibc 2.43 (2026) ships CORE-MATH correctly-rounded erf/erfc, so a modern
+//! Linux *system* libm is now more accurate than this vendored erfc — the pin
+//! buys determinism, not peak accuracy, with `cr_erfc` as the contingency if
+//! the tail ever regresses.
 
 /// `1 / sqrt(2)` — multiply rather than divide; saves ~7 cycles per call on
 /// `x86_64`.  IEEE 754 division and multiplication round identically here
@@ -364,6 +375,78 @@ mod tests {
             (1000.0, 5.641_893_014_533_876e-4),
         ] {
             assert_relative_eq!(erfcx(z), expected, epsilon = 1e-14);
+        }
+    }
+
+    /// Dense `erfcx` goldens (mpmath, 60 digits) across the direct-path range
+    /// `z < 26.5`, where `erfcx` evaluates `(z*z).exp() * libm::erfc(z)`. This
+    /// is the libm-bump gate (see the module doc + `Cargo.toml`): `libm` is
+    /// pinned exactly, and a deliberate bump that shifted deep-tail `erfc` bits
+    /// would fail here. Tolerance matches `erfcx_golden_values` (1e-14): the
+    /// vendored `erfc` is bit-identical cross-platform, but the neighbouring
+    /// `(z*z).exp()` is std math, so ~1-2 ULP of cross-platform drift is
+    /// expected — 1e-14 clears that plus erfc's 4-ULP budget with headroom.
+    #[test]
+    fn erfcx_dense_direct_path_goldens() {
+        for &(z, expected) in &[
+            (-3.0, 1.620_598_885_399_958_6e4),
+            (-2.0, 1.089_409_043_899_779_7e2),
+            (-1.0, 5.008_980_080_762_283e0),
+            (-0.5, 1.952_360_489_182_557e0),
+            (0.5, 6.156_903_441_929_259e-1),
+            (1.0, 4.275_835_761_558_07e-1),
+            (1.5, 3.215_854_164_543_175e-1),
+            (2.0, 2.553_956_763_105_057_5e-1),
+            (2.5, 2.108_063_640_611_436e-1),
+            (3.0, 1.790_011_511_813_899_6e-1),
+            (3.5, 1.552_936_556_088_943e-1),
+            (4.0, 1.369_994_576_250_613_8e-1),
+            (4.5, 1.224_848_042_738_414_2e-1),
+            (5.0, 1.107_046_377_330_686_3e-1),
+            (5.5, 1.009_622_183_994_990_9e-1),
+            (6.0, 9.277_656_780_053_835e-2),
+            (6.5, 8.580_567_010_489_461e-2),
+            (7.0, 7.980_005_432_915_294e-2),
+            (7.5, 7.457_369_306_287_669e-2),
+            (8.0, 6.998_516_620_088_092e-2),
+            (8.5, 6.592_512_249_998_035e-2),
+            (9.0, 6.230_772_403_777_468e-2),
+            (9.5, 5.906_467_835_256_389e-2),
+            (10.0, 5.614_099_274_382_259e-2),
+            (10.5, 5.349_189_974_656_412e-2),
+            (11.0, 5.108_059_475_808_844_6e-2),
+            (11.5, 4.887_654_689_598_227_4e-2),
+            (12.0, 4.685_422_101_489_376e-2),
+            (12.5, 4.499_209_900_102_792e-2),
+            (13.0, 4.327_192_186_460_969_4e-2),
+            (13.5, 4.167_809_676_408_815e-2),
+            (14.0, 4.019_722_865_021_846e-2),
+            (14.5, 3.881_774_707_464_722e-2),
+            (15.0, 3.752_960_638_850_576e-2),
+            (15.5, 3.632_404_305_948_543e-2),
+            (16.0, 3.519_337_782_493_084e-2),
+            (16.5, 3.413_085_332_191_327_6e-2),
+            (17.0, 3.313_049_999_972_554e-2),
+            (17.5, 3.218_702_473_823_041e-2),
+            (18.0, 3.129_571_781_590_521e-2),
+            (18.5, 3.045_237_479_977_461e-2),
+            (19.0, 2.965_323_064_126_216_4e-2),
+            (19.5, 2.889_490_381_193_821_8e-2),
+            (20.0, 2.817_434_874_105_132e-2),
+            (20.5, 2.748_881_515_193_487e-2),
+            (21.0, 2.683_581_315_864_795_6e-2),
+            (21.5, 2.621_308_319_381_898_3e-2),
+            (22.0, 2.561_857_000_587_945_3e-2),
+            (22.5, 2.505_040_009_801_007_6e-2),
+            (23.0, 2.450_686_208_928_260_6e-2),
+            (23.5, 2.398_638_956_613_400_8e-2),
+            (24.0, 2.348_754_606_368_264e-2),
+            (24.5, 2.300_901_187_477_818_3e-2),
+            (25.0, 2.254_957_243_264_136e-2),
+            (25.5, 2.210_810_805_251_982_7e-2),
+            (26.0, 2.168_358_485_056_290_7e-2),
+        ] {
+            assert_relative_eq!(erfcx(z), expected, max_relative = 1e-14);
         }
     }
 
