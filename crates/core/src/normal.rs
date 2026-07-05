@@ -58,6 +58,20 @@ pub fn cdf(x: f64) -> f64 {
 
 #[cold]
 fn cdf_tail(x: f64) -> f64 {
+    // Non-finite inputs land here (`|±inf| < 4` and `|NaN| < 4` are both false),
+    // so this cold branch owns their exact limits — keeping the hot `|x| < 4`
+    // path free of the guard. Without it, `erfcx(±inf)` fed the modified-Lentz
+    // recurrence a `NaN` that never satisfied its `|δ−1| < 1e-16` break, spinning
+    // the full 200-iteration cap and returning `NaN` where the limit is 1 or 0.
+    if !x.is_finite() {
+        return if x.is_nan() {
+            f64::NAN
+        } else if x > 0.0 {
+            1.0
+        } else {
+            0.0
+        };
+    }
     if x < 0.0 {
         0.5 * (-0.5 * x * x).exp() * erfcx(-x * INV_SQRT_2)
     } else {
@@ -106,6 +120,21 @@ pub fn erfcx(z: f64) -> f64 {
     const LENTZ_TINY: f64 = 1e-300;
     // Direct path stays below the `exp(z*z)` overflow cliff (`z*z > 709`).
     const DIRECT_LIMIT: f64 = 26.5;
+
+    // Exact limits for non-finite z. `+inf` and `NaN` would otherwise reach the
+    // continued fraction below (`+inf ≥ DIRECT_LIMIT`; `NaN < DIRECT_LIMIT` is
+    // false), where the recurrence produces a `NaN` δ that never trips the break
+    // — spinning all 200 iterations and returning `NaN`. `erfcx(+inf) = 0`,
+    // `erfcx(−inf) = +inf`, `erfcx(NaN) = NaN`.
+    if !z.is_finite() {
+        return if z.is_nan() {
+            f64::NAN
+        } else if z > 0.0 {
+            0.0
+        } else {
+            f64::INFINITY
+        };
+    }
 
     if z < DIRECT_LIMIT {
         // Direct product.  For very negative z, exp(z²) correctly overflows
@@ -363,6 +392,24 @@ mod tests {
         // only matches to about 1e-3. By z = 1e6 it's exact to f64.
         assert_relative_eq!(erfcx(1e6) * 1e6 / INV_SQRT_PI, 1.0, epsilon = 1e-12);
         assert_relative_eq!(erfcx(1e8), INV_SQRT_PI / 1e8, epsilon = 1e-15);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn cdf_non_finite_returns_exact_limits() {
+        // Φ(+inf) = 1, Φ(−inf) = 0, Φ(NaN) = NaN — and no 200-iteration spin.
+        assert_eq!(cdf(f64::INFINITY), 1.0);
+        assert_eq!(cdf(f64::NEG_INFINITY), 0.0);
+        assert!(cdf(f64::NAN).is_nan());
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn erfcx_non_finite_returns_exact_limits() {
+        // erfcx(+inf) = 0, erfcx(−inf) = +inf, erfcx(NaN) = NaN.
+        assert_eq!(erfcx(f64::INFINITY), 0.0);
+        assert_eq!(erfcx(f64::NEG_INFINITY), f64::INFINITY);
+        assert!(erfcx(f64::NAN).is_nan());
     }
 
     // inverse_cdf golden values from scipy.stats.norm.ppf (which uses AS241).
