@@ -25,7 +25,15 @@ crate-type = ["cdylib", "rlib"]
 # pyproject.toml. `cargo test` runs without it and links against a real Python.
 pyo3 = { version = "0.29", features = ["abi3-py310"] }
 numpy = "0.29"
-libm = "0.2"
+# Pinned EXACTLY. `erf`/`erfc` come from this pure-Rust crate (not the platform
+# libm) for cross-platform bit-determinism of the tail. `erfc` is the weakest
+# primitive under our ~1-ULP price/IV bar — the crate's own MPFR suite only
+# guarantees it to 4 ULP — and libm now evolves inside rust-lang/compiler-builtins
+# (standalone repo archived Apr 2025), so a routine `cargo update` could silently
+# shift deep-tail erfc bits. Any deliberate bump must clear the dense erfcx gate
+# in `normal.rs` (`erfcx_dense_direct_path_goldens`). Contingency if a tail
+# regression ever surfaces: CORE-MATH `cr_erfc` (MIT, single-file, safe-Rust).
+libm = "=0.2.16"
 # Vectorised IV (n >= PARALLEL_THRESHOLD) and bundled-Greeks (n >=
 # GREEKS_PARALLEL_THRESHOLD) dispatch uses rayon's global thread pool;
 # small calls stay serial to avoid pool spin-up overhead. Pool size
