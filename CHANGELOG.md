@@ -4,6 +4,18 @@ All notable changes to pyvolr are documented in this file. This file is
 maintained by [release-please](https://github.com/googleapis/release-please)
 from conventional commits — do not edit version sections by hand.
 
+## [0.1.7](https://github.com/yipjunkai/pyvolr/compare/v0.1.6...v0.1.7) (2026-07-05)
+
+
+### Features
+
+* parallel price and single-greek array endpoints ([#68](https://github.com/yipjunkai/pyvolr/issues/68)) ([f2aa2cd](https://github.com/yipjunkai/pyvolr/commit/f2aa2cdf5d8a0ba93ced6570f2802d40fec5fd12))
+
+
+### Bug Fixes
+
+* **core:** keep pricing and IV finite at overflow / non-finite corners ([#71](https://github.com/yipjunkai/pyvolr/issues/71)) ([5028059](https://github.com/yipjunkai/pyvolr/commit/5028059e04384d545b034842bddd154e0618e2f2))
+
 ## [0.1.6](https://github.com/yipjunkai/pyvolr/compare/v0.1.5...v0.1.6) (2026-07-03)
 
 
