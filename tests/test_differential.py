@@ -226,6 +226,35 @@ def test_rho_matches_py_vollib(
     assert pv == pytest.approx(ref, abs=GREEK_TOL)
 
 
+# Deep-OTM / short-expiry corner. The main grids top out at K/S = 3 and
+# T = 0.05; here K reaches 5*S and T drops to 0.01, where pyvolr's engine-based
+# pricer and py_vollib's textbook `S*Phi(d1) - K*Phi(d2)` both collapse toward
+# zero. The values are tiny, so the same absolute tolerances hold and this
+# simply guards against a gross tail regression the main grid can't reach. IV is
+# intentionally excluded: its inversion is ill-conditioned this deep and
+# py_vollib raises below-intrinsic rather than returning a comparable sigma.
+@pytest.mark.parametrize(
+    ("s", "k", "t", "r", "sigma", "flag"),
+    _params([100.0], [250.0, 500.0], [0.01, 0.05], [0.0, 0.05], [0.15, 0.50], FLAGS),
+)
+def test_deep_otm_short_expiry_matches_py_vollib(
+    s: float, k: float, t: float, r: float, sigma: float, flag: str
+) -> None:
+    assert _pv_bs(flag, s, k, t, r, sigma) == pytest.approx(
+        _pvol_bs(flag, s, k, t, r, sigma), abs=PRICE_TOL
+    )
+    for pv_g, ref_g in (
+        (_pv_delta, _pvol_delta),
+        (_pv_gamma, _pvol_gamma),
+        (_pv_vega, _pvol_vega),
+        (_pv_theta, _pvol_theta),
+        (_pv_rho, _pvol_rho),
+    ):
+        assert pv_g(flag, s, k, t, r, sigma) == pytest.approx(
+            ref_g(flag, s, k, t, r, sigma), abs=GREEK_TOL
+        )
+
+
 @pytest.mark.parametrize(
     ("s", "k", "t", "r", "sigma", "flag"),
     # Trim IV grid: solving is expensive and we only need to confirm both
