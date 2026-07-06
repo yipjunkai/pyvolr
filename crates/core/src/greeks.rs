@@ -162,6 +162,169 @@ pub fn all(
     (delta_v, gamma_v, vega_v, theta_v, rho_v)
 }
 
+// ---------------------------------------------------------------------------
+// Higher-order (second- and third-order) Greeks.
+//
+// Conventions match the first-order block: per unit `sigma` (not per 1%), and
+// per year for the time-decay members. Those three follow `theta`'s sign
+// convention — MINUS the derivative with respect to time-to-expiry `t` — so
+// each is a spatial/vol derivative of `theta`:
+//     charm = -d(delta)/dt = d(theta)/dS
+//     color = -d(gamma)/dt = d2(theta)/dS2
+//     veta  = -d(vega)/dt  = d(theta)/dsigma
+// All eight return `0.0` for the degenerate `t <= 0` / `sigma <= 0` cases,
+// consistent with their parents (`gamma`/`vega`/`theta` all vanish there, so
+// their S/sigma derivatives do too). Only `charm` depends on the flag — it
+// carries `N(±d1)` carry terms; the other seven are call/put-identical.
+// Every formula (and every sign) is pinned against mpmath autodiff of the
+// exact price in `tools/gen_goldens.py`.
+
+/// Vanna: `d(vega)/dS = d(delta)/dsigma`. Per unit vol. Flag-independent.
+pub fn vanna(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
+    if t <= 0.0 || sigma <= 0.0 {
+        return 0.0;
+    }
+    let (d1, d2) = d1_d2(s, k, t, r, q, sigma);
+    let disc_q = (-q * t).exp();
+    -disc_q * pdf(d1) * d2 / sigma
+}
+
+/// Vomma (a.k.a. volga): `d(vega)/dsigma`. Per unit vol. Flag-independent.
+/// Positive away from the money; negative in the ATM band where `d1*d2 < 0`.
+pub fn vomma(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
+    if t <= 0.0 || sigma <= 0.0 {
+        return 0.0;
+    }
+    let (d1, d2) = d1_d2(s, k, t, r, q, sigma);
+    let disc_q = (-q * t).exp();
+    s * disc_q * pdf(d1) * t.sqrt() * d1 * d2 / sigma
+}
+
+/// Charm (delta decay): `-d(delta)/dt` per year (`t` = time to expiry), i.e.
+/// `d(theta)/dS`. The only higher-order Greek that depends on the flag. The
+/// put routes through `cdf(-d1)` so the `erfcx` tail keeps deep-OTM puts
+/// precise (same reasoning as put `delta`).
+pub fn charm(flag: Flag, s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
+    if t <= 0.0 || sigma <= 0.0 {
+        return 0.0;
+    }
+    let (d1, d2) = d1_d2(s, k, t, r, q, sigma);
+    let sqrt_t = t.sqrt();
+    let vst = sigma * sqrt_t;
+    let disc_q = (-q * t).exp();
+    let common = disc_q * pdf(d1) * (2.0 * (r - q) * t - d2 * vst) / (2.0 * t * vst);
+    match flag {
+        Flag::Call => q * disc_q * cdf(d1) - common,
+        Flag::Put => -q * disc_q * cdf(-d1) - common,
+    }
+}
+
+/// Speed: `d(gamma)/dS = d3(price)/dS3`. Flag-independent.
+pub fn speed(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
+    if t <= 0.0 || sigma <= 0.0 {
+        return 0.0;
+    }
+    let (d1, _) = d1_d2(s, k, t, r, q, sigma);
+    let vst = sigma * t.sqrt();
+    let disc_q = (-q * t).exp();
+    -disc_q * pdf(d1) / (s * s * vst) * (d1 / vst + 1.0)
+}
+
+/// Zomma: `d(gamma)/dsigma`. Per unit vol. Flag-independent.
+pub fn zomma(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
+    if t <= 0.0 || sigma <= 0.0 {
+        return 0.0;
+    }
+    let (d1, d2) = d1_d2(s, k, t, r, q, sigma);
+    let vst = sigma * t.sqrt();
+    let disc_q = (-q * t).exp();
+    // `mul_add` fuses `d1*d2 - 1` into a single rounding, which matters near
+    // the interior zero at `d1*d2 = 1` where the difference cancels.
+    disc_q * pdf(d1) / (s * vst) * d1.mul_add(d2, -1.0) / sigma
+}
+
+/// Color (gamma decay): `-d(gamma)/dt` per year (`t` = time to expiry), i.e.
+/// `d2(theta)/dS2`. Flag-independent.
+pub fn color(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
+    if t <= 0.0 || sigma <= 0.0 {
+        return 0.0;
+    }
+    let (d1, d2) = d1_d2(s, k, t, r, q, sigma);
+    let sqrt_t = t.sqrt();
+    let vst = sigma * sqrt_t;
+    let disc_q = (-q * t).exp();
+    disc_q * pdf(d1) / (2.0 * s * t * vst)
+        * (2.0 * q * t + 1.0 + (2.0 * (r - q) * t - d2 * vst) / vst * d1)
+}
+
+/// Veta (vega decay): `-d(vega)/dt` per year (`t` = time to expiry), i.e.
+/// `d(theta)/dsigma`. Per unit vol. Flag-independent.
+pub fn veta(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
+    if t <= 0.0 || sigma <= 0.0 {
+        return 0.0;
+    }
+    let (d1, d2) = d1_d2(s, k, t, r, q, sigma);
+    let sqrt_t = t.sqrt();
+    let vst = sigma * sqrt_t;
+    let disc_q = (-q * t).exp();
+    s * disc_q * pdf(d1) * sqrt_t * (q + (r - q) * d1 / vst - d1.mul_add(d2, 1.0) / (2.0 * t))
+}
+
+/// Ultima: `d(vomma)/dsigma = d3(price)/dsigma3`. Per unit vol. Flag-independent.
+pub fn ultima(s: f64, k: f64, t: f64, r: f64, q: f64, sigma: f64) -> f64 {
+    if t <= 0.0 || sigma <= 0.0 {
+        return 0.0;
+    }
+    let (d1, d2) = d1_d2(s, k, t, r, q, sigma);
+    let sqrt_t = t.sqrt();
+    let disc_q = (-q * t).exp();
+    -s * disc_q * pdf(d1) * sqrt_t / (sigma * sigma)
+        * (d1 * d2 * d1.mul_add(-d2, 1.0) + d1 * d1 + d2 * d2)
+}
+
+/// Compute all eight higher-order Greeks in a single pass, sharing `d1_d2`,
+/// `disc_q`, `sqrt_t`, `vst = sigma*sqrt_t`, and `pdf(d1)`. Returns
+/// `(vanna, vomma, charm, speed, zomma, color, veta, ultima)`. Numerically
+/// identical to the per-Greek functions (pinned by `higher_all_matches_individual_*`).
+pub fn higher_all(
+    flag: Flag,
+    s: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    q: f64,
+    sigma: f64,
+) -> (f64, f64, f64, f64, f64, f64, f64, f64) {
+    if t <= 0.0 || sigma <= 0.0 {
+        return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    }
+    let (d1, d2) = d1_d2(s, k, t, r, q, sigma);
+    let sqrt_t = t.sqrt();
+    let vst = sigma * sqrt_t;
+    let disc_q = (-q * t).exp();
+    let pd1 = pdf(d1);
+
+    // Each expression is byte-identical to the corresponding standalone fn
+    // above (same shared subexpressions, same association), so the outputs
+    // match bit-for-bit — verified by the drift-guard tests.
+    let vanna = -disc_q * pd1 * d2 / sigma;
+    let vomma = s * disc_q * pd1 * sqrt_t * d1 * d2 / sigma;
+    let charm_common = disc_q * pd1 * (2.0 * (r - q) * t - d2 * vst) / (2.0 * t * vst);
+    let charm = match flag {
+        Flag::Call => q * disc_q * cdf(d1) - charm_common,
+        Flag::Put => -q * disc_q * cdf(-d1) - charm_common,
+    };
+    let speed = -disc_q * pd1 / (s * s * vst) * (d1 / vst + 1.0);
+    let zomma = disc_q * pd1 / (s * vst) * d1.mul_add(d2, -1.0) / sigma;
+    let color = disc_q * pd1 / (2.0 * s * t * vst)
+        * (2.0 * q * t + 1.0 + (2.0 * (r - q) * t - d2 * vst) / vst * d1);
+    let veta =
+        s * disc_q * pd1 * sqrt_t * (q + (r - q) * d1 / vst - d1.mul_add(d2, 1.0) / (2.0 * t));
+    let ultima = -s * disc_q * pd1 * sqrt_t / (sigma * sigma)
+        * (d1 * d2 * d1.mul_add(-d2, 1.0) + d1 * d1 + d2 * d2);
+    (vanna, vomma, charm, speed, zomma, color, veta, ultima)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -331,6 +494,206 @@ mod tests {
                 assert_eq!(v, vega(s, k, t, r, q, sigma));
                 assert_eq!(th, theta(flag, s, k, t, r, q, sigma));
                 assert_eq!(rh, rho(flag, s, k, t, r, q, sigma));
+            }
+        }
+    }
+
+    // --- Higher-order Greeks ------------------------------------------------
+
+    /// Each higher-order Greek vs a central finite difference of the matching
+    /// first-order Greek — a coarse cross-check that each Greek really is the
+    /// derivative it claims to be; the mpmath goldens below are the precise
+    /// gate. Tolerance is relative (the family spans `speed ~1e-4` to
+    /// `ultima ~1e2`); measured central-difference error here is <=5e-7, so
+    /// `1e-5` leaves >10x headroom while still catching any wrong relationship
+    /// (a mistranscribed formula misses by O(1)).
+    #[test]
+    fn higher_greeks_match_finite_difference() {
+        const TOL: f64 = 1e-5;
+        let (s, k, t, r, q, sigma) = (100.0, 105.0, 0.5, 0.05, 0.02, 0.25);
+        // vanna = d(delta)/dsigma
+        assert_relative_eq!(
+            vanna(s, k, t, r, q, sigma),
+            finite_diff(|v| delta(Flag::Call, s, k, t, r, q, v), sigma, 1e-4),
+            max_relative = TOL
+        );
+        // vomma = d(vega)/dsigma
+        assert_relative_eq!(
+            vomma(s, k, t, r, q, sigma),
+            finite_diff(|v| vega(s, k, t, r, q, v), sigma, 1e-4),
+            max_relative = TOL
+        );
+        // charm = -d(delta)/dt, for both flags
+        for &flag in &[Flag::Call, Flag::Put] {
+            assert_relative_eq!(
+                charm(flag, s, k, t, r, q, sigma),
+                -finite_diff(|x| delta(flag, s, k, x, r, q, sigma), t, 1e-5),
+                max_relative = TOL
+            );
+        }
+        // speed = d(gamma)/dS
+        assert_relative_eq!(
+            speed(s, k, t, r, q, sigma),
+            finite_diff(|x| gamma(x, k, t, r, q, sigma), s, 1e-2),
+            max_relative = TOL
+        );
+        // zomma = d(gamma)/dsigma
+        assert_relative_eq!(
+            zomma(s, k, t, r, q, sigma),
+            finite_diff(|v| gamma(s, k, t, r, q, v), sigma, 1e-4),
+            max_relative = TOL
+        );
+        // color = -d(gamma)/dt
+        assert_relative_eq!(
+            color(s, k, t, r, q, sigma),
+            -finite_diff(|x| gamma(s, k, x, r, q, sigma), t, 1e-5),
+            max_relative = TOL
+        );
+        // veta = -d(vega)/dt
+        assert_relative_eq!(
+            veta(s, k, t, r, q, sigma),
+            -finite_diff(|x| vega(s, k, x, r, q, sigma), t, 1e-5),
+            max_relative = TOL
+        );
+        // ultima = d(vomma)/dsigma
+        assert_relative_eq!(
+            ultima(s, k, t, r, q, sigma),
+            finite_diff(|v| vomma(s, k, t, r, q, v), sigma, 1e-4),
+            max_relative = TOL
+        );
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn assert_higher_close(
+        got: (f64, f64, f64, f64, f64, f64, f64, f64),
+        want: (f64, f64, f64, f64, f64, f64, f64, f64),
+    ) {
+        assert_relative_eq!(got.0, want.0, max_relative = 1e-12);
+        assert_relative_eq!(got.1, want.1, max_relative = 1e-12);
+        assert_relative_eq!(got.2, want.2, max_relative = 1e-12);
+        assert_relative_eq!(got.3, want.3, max_relative = 1e-12);
+        assert_relative_eq!(got.4, want.4, max_relative = 1e-12);
+        assert_relative_eq!(got.5, want.5, max_relative = 1e-12);
+        assert_relative_eq!(got.6, want.6, max_relative = 1e-12);
+        assert_relative_eq!(got.7, want.7, max_relative = 1e-12);
+    }
+
+    /// mpmath 50-digit goldens, regenerable via `tools/gen_goldens.py`. Every
+    /// value was independently cross-checked against autodiff of the exact
+    /// price before being pinned (that dual derivation fixes each sign). Tuple
+    /// order: (vanna, vomma, charm, speed, zomma, color, veta, ultima).
+    #[test]
+    fn higher_greeks_match_mpmath_goldens() {
+        // ATM with dividend: call, 100/100/1.0/0.05/0.02/0.20
+        assert_higher_close(
+            higher_all(Flag::Call, 100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+            (
+                -0.094_752_893_775_043_55,
+                2.368_822_344_376_088_7,
+                -0.035_639_423_964_826_51,
+                -0.000_426_388_021_987_696_04,
+                -0.093_568_482_602_855_52,
+                0.010_446_506_538_698_554,
+                -17.008_144_432_620_32,
+                -73.285_441_279_135_24,
+            ),
+        );
+        // Same point, put — only charm differs from the call.
+        let gp = higher_all(Flag::Put, 100.0, 100.0, 1.0, 0.05, 0.02, 0.20);
+        assert_relative_eq!(gp.2, -0.055_243_397_430_961_61, max_relative = 1e-12);
+
+        // OTM call: 100/120/0.5/0.03/0.01/0.30
+        assert_higher_close(
+            higher_all(Flag::Call, 100.0, 120.0, 0.5, 0.03, 0.01, 0.30),
+            (
+                0.946_962_192_418_032_5,
+                47.291_783_297_695_34,
+                -0.310_864_499_412_486_95,
+                0.000_339_668_268_295_570_55,
+                -0.017_078_787_798_722_746,
+                0.004_298_479_873_034_124,
+                -37.298_259_187_916_486,
+                -381.604_346_414_637_2,
+            ),
+        );
+
+        // ITM put: 100/90/0.5/0.05/0.02/0.25
+        assert_higher_close(
+            higher_all(Flag::Put, 100.0, 90.0, 0.5, 0.05, 0.02, 0.25),
+            (
+                -0.696_305_907_270_881_6,
+                37.875_007_142_328_58,
+                0.119_841_250_583_479_52,
+                -0.000_889_456_278_334_253_9,
+                -0.036_182_304_789_646_87,
+                0.011_547_739_256_155_704,
+                -27.116_769_994_498_952,
+                -395.840_230_173_135_9,
+            ),
+        );
+    }
+
+    /// Drift guard: `higher_all` must agree with the per-Greek functions.
+    /// Shared subexpressions line up, so the tolerance is tight.
+    #[test]
+    fn higher_all_matches_individual_at_grid() {
+        let grid: &[(f64, f64, f64, f64, f64, f64)] = &[
+            (100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+            (100.0, 120.0, 0.5, 0.03, 0.01, 0.30),
+            (100.0, 90.0, 0.5, 0.05, 0.02, 0.25),
+            (100.0, 200.0, 0.5, 0.05, 0.0, 0.30), // deep OTM call
+            (1000.0, 100.0, 0.01, 0.05, 0.0, 0.20), // deep ITM
+        ];
+        for &(s, k, t, r, q, sigma) in grid {
+            for &flag in &[Flag::Call, Flag::Put] {
+                let (va, vo, ch, sp, zo, co, ve, ul) = higher_all(flag, s, k, t, r, q, sigma);
+                assert_relative_eq!(va, vanna(s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(vo, vomma(s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(ch, charm(flag, s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(sp, speed(s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(zo, zomma(s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(co, color(s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(ve, veta(s, k, t, r, q, sigma), max_relative = 1e-15);
+                assert_relative_eq!(ul, ultima(s, k, t, r, q, sigma), max_relative = 1e-15);
+            }
+        }
+    }
+
+    /// Put-call parity for charm: `charm_call - charm_put = q*exp(-qT)`, from
+    /// differentiating `d(delta_call - delta_put)/dt = d(exp(-qT))/dt`. The
+    /// other seven higher Greeks are flag-independent, so this is the only
+    /// parity identity in the family.
+    #[test]
+    fn charm_put_call_parity() {
+        let (s, k, t, r, q, sigma) = (100.0, 105.0, 0.5, 0.05, 0.03, 0.25);
+        let cc = charm(Flag::Call, s, k, t, r, q, sigma);
+        let cp = charm(Flag::Put, s, k, t, r, q, sigma);
+        assert_relative_eq!(cc - cp, q * (-q * t).exp(), max_relative = 1e-14);
+    }
+
+    /// Degenerate policy: all eight vanish for `t <= 0` or `sigma <= 0`,
+    /// matching the parents (`gamma`/`vega`/`theta` all return 0 there).
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn higher_greeks_degenerate_are_zero() {
+        let degenerate: &[(f64, f64, f64, f64, f64, f64)] = &[
+            (110.0, 100.0, 0.0, 0.05, 0.0, 0.20), // t = 0
+            (100.0, 100.0, 1.0, 0.05, 0.0, 0.0),  // sigma = 0
+        ];
+        for &(s, k, t, r, q, sigma) in degenerate {
+            for &flag in &[Flag::Call, Flag::Put] {
+                assert_eq!(vanna(s, k, t, r, q, sigma), 0.0);
+                assert_eq!(vomma(s, k, t, r, q, sigma), 0.0);
+                assert_eq!(charm(flag, s, k, t, r, q, sigma), 0.0);
+                assert_eq!(speed(s, k, t, r, q, sigma), 0.0);
+                assert_eq!(zomma(s, k, t, r, q, sigma), 0.0);
+                assert_eq!(color(s, k, t, r, q, sigma), 0.0);
+                assert_eq!(veta(s, k, t, r, q, sigma), 0.0);
+                assert_eq!(ultima(s, k, t, r, q, sigma), 0.0);
+                assert_eq!(
+                    higher_all(flag, s, k, t, r, q, sigma),
+                    (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+                );
             }
         }
     }

@@ -113,6 +113,64 @@ pub fn all(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> (f64, f64,
     (delta_v, gamma_v, vega_v, theta_v, rho_v)
 }
 
+// Higher-order Greeks. Each is a q = r specialization of its BSM counterpart —
+// none differentiates with respect to `r`, so (unlike `rho`) there is no
+// Black-76-specific divergence and the delegation is exact. See `greeks` for
+// the formulas, sign conventions, and degenerate-case policy.
+
+/// Vanna: `d(vega)/dF = d(delta)/dsigma`. Per unit vol. See `greeks::vanna`.
+pub fn vanna(f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
+    greeks::vanna(f, k, t, r, r, sigma)
+}
+
+/// Vomma (volga): `d(vega)/dsigma`. Per unit vol. See `greeks::vomma`.
+pub fn vomma(f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
+    greeks::vomma(f, k, t, r, r, sigma)
+}
+
+/// Charm (delta decay): `-d(delta)/dt` per year. Flag-dependent. See `greeks::charm`.
+pub fn charm(flag: Flag, f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
+    greeks::charm(flag, f, k, t, r, r, sigma)
+}
+
+/// Speed: `d(gamma)/dF`. See `greeks::speed`.
+pub fn speed(f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
+    greeks::speed(f, k, t, r, r, sigma)
+}
+
+/// Zomma: `d(gamma)/dsigma`. Per unit vol. See `greeks::zomma`.
+pub fn zomma(f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
+    greeks::zomma(f, k, t, r, r, sigma)
+}
+
+/// Color (gamma decay): `-d(gamma)/dt` per year. See `greeks::color`.
+pub fn color(f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
+    greeks::color(f, k, t, r, r, sigma)
+}
+
+/// Veta (vega decay): `-d(vega)/dt` per year. Per unit vol. See `greeks::veta`.
+pub fn veta(f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
+    greeks::veta(f, k, t, r, r, sigma)
+}
+
+/// Ultima: `d(vomma)/dsigma`. Per unit vol. See `greeks::ultima`.
+pub fn ultima(f: f64, k: f64, t: f64, r: f64, sigma: f64) -> f64 {
+    greeks::ultima(f, k, t, r, r, sigma)
+}
+
+/// All eight higher-order Black-76 Greeks in a single pass. See `greeks::higher_all`.
+/// Order: `(vanna, vomma, charm, speed, zomma, color, veta, ultima)`.
+pub fn higher_all(
+    flag: Flag,
+    f: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    sigma: f64,
+) -> (f64, f64, f64, f64, f64, f64, f64, f64) {
+    greeks::higher_all(flag, f, k, t, r, r, sigma)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,6 +373,56 @@ mod tests {
                 assert_eq!(v, vega(f, k, t, r, sigma));
                 assert_eq!(th, theta(flag, f, k, t, r, sigma));
                 assert_eq!(rh, rho(flag, f, k, t, r, sigma));
+            }
+        }
+    }
+
+    /// Each higher-order Black-76 Greek must equal its `q = r` BSM counterpart
+    /// (guards the delegation arg order), and `higher_all` must match the
+    /// individual functions.
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn higher_greeks_delegate_to_bsm_with_q_eq_r() {
+        let grid: &[(f64, f64, f64, f64, f64)] = &[
+            (100.0, 100.0, 1.0, 0.05, 0.20),
+            (49.0, 50.0, 0.3846, 0.05, 0.20),
+            (100.0, 120.0, 0.5, 0.03, 0.30),
+        ];
+        for &(f, k, t, r, sigma) in grid {
+            assert_eq!(
+                vanna(f, k, t, r, sigma),
+                greeks::vanna(f, k, t, r, r, sigma)
+            );
+            assert_eq!(
+                vomma(f, k, t, r, sigma),
+                greeks::vomma(f, k, t, r, r, sigma)
+            );
+            assert_eq!(
+                speed(f, k, t, r, sigma),
+                greeks::speed(f, k, t, r, r, sigma)
+            );
+            assert_eq!(
+                zomma(f, k, t, r, sigma),
+                greeks::zomma(f, k, t, r, r, sigma)
+            );
+            assert_eq!(
+                color(f, k, t, r, sigma),
+                greeks::color(f, k, t, r, r, sigma)
+            );
+            assert_eq!(veta(f, k, t, r, sigma), greeks::veta(f, k, t, r, r, sigma));
+            assert_eq!(
+                ultima(f, k, t, r, sigma),
+                greeks::ultima(f, k, t, r, r, sigma)
+            );
+            for &flag in &[Flag::Call, Flag::Put] {
+                assert_eq!(
+                    charm(flag, f, k, t, r, sigma),
+                    greeks::charm(flag, f, k, t, r, r, sigma)
+                );
+                assert_eq!(
+                    higher_all(flag, f, k, t, r, sigma),
+                    greeks::higher_all(flag, f, k, t, r, r, sigma)
+                );
             }
         }
     }

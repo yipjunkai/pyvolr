@@ -73,6 +73,50 @@ def nb_call(x: float, s: float) -> mp.mpf:
     return mp.e ** (x_ / 2) * phi(x_ / s_ + s_ / 2) - mp.e ** (-x_ / 2) * phi(x_ / s_ - s_ / 2)
 
 
+def higher_greek(
+    name: str, flag: str, s: float, k: float, t: float, r: float, q: float, sigma: float
+) -> mp.mpf:
+    """Closed-form higher-order Greek (per unit vol; the time-decay members
+    charm/color/veta follow theta's `-d/dt` sign convention). These are the
+    exact formulas implemented in `greeks.rs`; each was cross-checked against
+    mpmath autodiff of the price before being pinned (that dual derivation is
+    what fixes every sign). Dispatch by `name` so one section covers all eight.
+    """
+    s_, k_, t_, r_, q_, v_ = (mp.mpf(str(a)) for a in (s, k, t, r, q, sigma))
+    sqrt_t = mp.sqrt(t_)
+    vst = v_ * sqrt_t
+    d1 = (mp.log(s_ / k_) + (r_ - q_ + v_ * v_ / 2) * t_) / vst
+    d2 = d1 - vst
+    dq = mp.e ** (-q_ * t_)
+    ph = pdf(d1)
+    vega = s_ * dq * ph * sqrt_t
+    gamma = dq * ph / (s_ * vst)
+    common = dq * ph * (2 * (r_ - q_) * t_ - d2 * vst) / (2 * t_ * vst)
+    if name == "vanna":
+        return -dq * ph * d2 / v_
+    if name == "vomma":
+        return vega * d1 * d2 / v_
+    if name == "charm":
+        return q_ * dq * phi(d1) - common if flag == "c" else -q_ * dq * phi(-d1) - common
+    if name == "speed":
+        return -gamma / s_ * (d1 / vst + 1)
+    if name == "zomma":
+        return gamma * (d1 * d2 - 1) / v_
+    if name == "color":
+        return (
+            dq
+            * ph
+            / (2 * s_ * t_ * vst)
+            * (2 * q_ * t_ + 1 + (2 * (r_ - q_) * t_ - d2 * vst) / vst * d1)
+        )
+    if name == "veta":
+        return vega * (q_ + (r_ - q_) * d1 / vst - (1 + d1 * d2) / (2 * t_))
+    if name == "ultima":
+        return -vega / (v_ * v_) * (d1 * d2 * (1 - d1 * d2) + d1 * d1 + d2 * d2)
+    msg = f"unknown higher Greek: {name}"
+    raise ValueError(msg)
+
+
 # --- golden tables: (rust_location, tol, compute, [(label, args, expected_f64), ...]) ---
 
 GOLDENS: list[tuple[str, float, Callable[..., mp.mpf], list[tuple[str, tuple, float]]]] = [
@@ -171,6 +215,142 @@ GOLDENS: list[tuple[str, float, Callable[..., mp.mpf], list[tuple[str, tuple, fl
             ("r1_deeper", (-1.5, 0.1), 2.423020570391163e-53),
             ("itm_call", (0.5, 0.2), 5.056237971192526e-1),
             ("itm_call_high_vol", (1.0, 0.5), 1.0463329697381733),
+        ],
+    ),
+    (
+        "greeks.rs::higher_greeks_match_mpmath_goldens",
+        1e-12,
+        higher_greek,
+        [
+            # ATM with dividend: 100/100/1.0/0.05/0.02/0.20 (call).
+            (
+                "atm_call vanna",
+                ("vanna", "c", 100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+                -0.09475289377504355,
+            ),
+            (
+                "atm_call vomma",
+                ("vomma", "c", 100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+                2.3688223443760887,
+            ),
+            (
+                "atm_call charm",
+                ("charm", "c", 100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+                -0.03563942396482651,
+            ),
+            (
+                "atm_call speed",
+                ("speed", "c", 100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+                -0.00042638802198769604,
+            ),
+            (
+                "atm_call zomma",
+                ("zomma", "c", 100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+                -0.09356848260285552,
+            ),
+            (
+                "atm_call color",
+                ("color", "c", 100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+                0.010446506538698554,
+            ),
+            (
+                "atm_call veta",
+                ("veta", "c", 100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+                -17.00814443262032,
+            ),
+            (
+                "atm_call ultima",
+                ("ultima", "c", 100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+                -73.28544127913524,
+            ),
+            # Same point, put — only charm differs.
+            (
+                "atm_put charm",
+                ("charm", "p", 100.0, 100.0, 1.0, 0.05, 0.02, 0.20),
+                -0.05524339743096161,
+            ),
+            # OTM call: 100/120/0.5/0.03/0.01/0.30.
+            (
+                "otm_call vanna",
+                ("vanna", "c", 100.0, 120.0, 0.5, 0.03, 0.01, 0.30),
+                0.9469621924180325,
+            ),
+            (
+                "otm_call vomma",
+                ("vomma", "c", 100.0, 120.0, 0.5, 0.03, 0.01, 0.30),
+                47.29178329769534,
+            ),
+            (
+                "otm_call charm",
+                ("charm", "c", 100.0, 120.0, 0.5, 0.03, 0.01, 0.30),
+                -0.31086449941248695,
+            ),
+            (
+                "otm_call speed",
+                ("speed", "c", 100.0, 120.0, 0.5, 0.03, 0.01, 0.30),
+                0.00033966826829557055,
+            ),
+            (
+                "otm_call zomma",
+                ("zomma", "c", 100.0, 120.0, 0.5, 0.03, 0.01, 0.30),
+                -0.017078787798722746,
+            ),
+            (
+                "otm_call color",
+                ("color", "c", 100.0, 120.0, 0.5, 0.03, 0.01, 0.30),
+                0.004298479873034124,
+            ),
+            (
+                "otm_call veta",
+                ("veta", "c", 100.0, 120.0, 0.5, 0.03, 0.01, 0.30),
+                -37.298259187916486,
+            ),
+            (
+                "otm_call ultima",
+                ("ultima", "c", 100.0, 120.0, 0.5, 0.03, 0.01, 0.30),
+                -381.6043464146372,
+            ),
+            # ITM put: 100/90/0.5/0.05/0.02/0.25.
+            (
+                "itm_put vanna",
+                ("vanna", "p", 100.0, 90.0, 0.5, 0.05, 0.02, 0.25),
+                -0.6963059072708816,
+            ),
+            (
+                "itm_put vomma",
+                ("vomma", "p", 100.0, 90.0, 0.5, 0.05, 0.02, 0.25),
+                37.87500714232858,
+            ),
+            (
+                "itm_put charm",
+                ("charm", "p", 100.0, 90.0, 0.5, 0.05, 0.02, 0.25),
+                0.11984125058347952,
+            ),
+            (
+                "itm_put speed",
+                ("speed", "p", 100.0, 90.0, 0.5, 0.05, 0.02, 0.25),
+                -0.0008894562783342539,
+            ),
+            (
+                "itm_put zomma",
+                ("zomma", "p", 100.0, 90.0, 0.5, 0.05, 0.02, 0.25),
+                -0.03618230478964687,
+            ),
+            (
+                "itm_put color",
+                ("color", "p", 100.0, 90.0, 0.5, 0.05, 0.02, 0.25),
+                0.011547739256155704,
+            ),
+            (
+                "itm_put veta",
+                ("veta", "p", 100.0, 90.0, 0.5, 0.05, 0.02, 0.25),
+                -27.116769994498952,
+            ),
+            (
+                "itm_put ultima",
+                ("ultima", "p", 100.0, 90.0, 0.5, 0.05, 0.02, 0.25),
+                -395.8402301731359,
+            ),
         ],
     ),
 ]
