@@ -221,3 +221,217 @@ def black76_iv_scalar(
 def black76_greeks_scalar(
     flag: int, f: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, sigma: _Scalar
 ) -> tuple[float, float, float, float, float]: ...
+
+# --- Higher-order Greeks (array, scalar, and bundled) ---
+
+def bsm_vanna(
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def bsm_vomma(
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def bsm_charm(
+    flag: NDArray[np.int8],
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def bsm_speed(
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def bsm_zomma(
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def bsm_color(
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def bsm_veta(
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def bsm_ultima(
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def bsm_higher_greeks(
+    flag: NDArray[np.int8],
+    s: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    q: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> tuple[
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+]: ...
+def bsm_vanna_scalar(
+    s: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, q: _Scalar, sigma: _Scalar
+) -> float: ...
+def bsm_vomma_scalar(
+    s: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, q: _Scalar, sigma: _Scalar
+) -> float: ...
+def bsm_charm_scalar(
+    flag: int, s: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, q: _Scalar, sigma: _Scalar
+) -> float: ...
+def bsm_speed_scalar(
+    s: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, q: _Scalar, sigma: _Scalar
+) -> float: ...
+def bsm_zomma_scalar(
+    s: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, q: _Scalar, sigma: _Scalar
+) -> float: ...
+def bsm_color_scalar(
+    s: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, q: _Scalar, sigma: _Scalar
+) -> float: ...
+def bsm_veta_scalar(
+    s: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, q: _Scalar, sigma: _Scalar
+) -> float: ...
+def bsm_ultima_scalar(
+    s: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, q: _Scalar, sigma: _Scalar
+) -> float: ...
+def bsm_higher_greeks_scalar(
+    flag: int, s: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, q: _Scalar, sigma: _Scalar
+) -> tuple[float, float, float, float, float, float, float, float]: ...
+def black76_vanna(
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def black76_vomma(
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def black76_charm(
+    flag: NDArray[np.int8],
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def black76_speed(
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def black76_zomma(
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def black76_color(
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def black76_veta(
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def black76_ultima(
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> NDArray[np.float64]: ...
+def black76_higher_greeks(
+    flag: NDArray[np.int8],
+    f: NDArray[np.float64],
+    k: NDArray[np.float64],
+    t: NDArray[np.float64],
+    r: NDArray[np.float64],
+    sigma: NDArray[np.float64],
+) -> tuple[
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+]: ...
+def black76_vanna_scalar(
+    f: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, sigma: _Scalar
+) -> float: ...
+def black76_vomma_scalar(
+    f: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, sigma: _Scalar
+) -> float: ...
+def black76_charm_scalar(
+    flag: int, f: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, sigma: _Scalar
+) -> float: ...
+def black76_speed_scalar(
+    f: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, sigma: _Scalar
+) -> float: ...
+def black76_zomma_scalar(
+    f: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, sigma: _Scalar
+) -> float: ...
+def black76_color_scalar(
+    f: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, sigma: _Scalar
+) -> float: ...
+def black76_veta_scalar(
+    f: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, sigma: _Scalar
+) -> float: ...
+def black76_ultima_scalar(
+    f: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, sigma: _Scalar
+) -> float: ...
+def black76_higher_greeks_scalar(
+    flag: int, f: _Scalar, k: _Scalar, t: _Scalar, r: _Scalar, sigma: _Scalar
+) -> tuple[float, float, float, float, float, float, float, float]: ...

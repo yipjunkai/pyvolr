@@ -41,6 +41,8 @@ from pyvolr._wrappers import (
     Formatted,
     Greeks,
     GreeksResult,
+    HigherGreeks,
+    HigherGreeksResult,
     OnError,
     ReturnAs,
     apply_on_error,
@@ -65,14 +67,24 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Greeks",
+    "HigherGreeks",
+    "charm",
+    "color",
     "delta",
     "gamma",
     "greeks",
+    "higher_greeks",
     "implied_vol",
     "price",
     "rho",
+    "speed",
     "theta",
+    "ultima",
+    "vanna",
     "vega",
+    "veta",
+    "vomma",
+    "zomma",
 ]
 
 
@@ -629,3 +641,562 @@ def greeks(
     d, g, v, th, rh = _core.black76_greeks(flag_arr, *flat)
     cols = {"delta": d, "gamma": g, "theta": th, "vega": v, "rho": rh}
     return cast("GreeksResult", format_result(cols, shape, return_as))
+
+
+# --- Higher-order Greeks ---
+
+
+@overload
+def vanna(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def vanna(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def vanna(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def vanna(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """Vanna: rate of change of vega with forward (equivalently, of delta with volatility).
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
+    # Scalar fast path; same dispatch pattern as price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        return _core.black76_vanna_scalar(F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
+    flat, shape = broadcast_f64(F, K, T, r, sigma)
+    out = _core.black76_vanna(*flat)
+    return format_result({"vanna": out}, shape, return_as)
+
+
+@overload
+def vomma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def vomma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def vomma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def vomma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """Vomma (volga): rate of change of vega with volatility.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
+    # Scalar fast path; same dispatch pattern as price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        return _core.black76_vomma_scalar(F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
+    flat, shape = broadcast_f64(F, K, T, r, sigma)
+    out = _core.black76_vomma(*flat)
+    return format_result({"vomma": out}, shape, return_as)
+
+
+@overload
+def charm(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def charm(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def charm(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def charm(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """Charm (delta decay): minus the rate of change of delta with time-to-expiry, per year.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
+    # Scalar fast path; same dispatch pattern as price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        iflag = scalar_flag_or_none(flag)
+        if iflag is not None:
+            return _core.black76_charm_scalar(iflag, F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
+    flat, shape = broadcast_f64(F, K, T, r, sigma)
+    flag_arr = normalize_flag(flag, shape).ravel()
+    out = _core.black76_charm(flag_arr, *flat)
+    return format_result({"charm": out}, shape, return_as)
+
+
+@overload
+def speed(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def speed(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def speed(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def speed(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """Speed: rate of change of gamma with forward (third order in forward).
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
+    # Scalar fast path; same dispatch pattern as price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        return _core.black76_speed_scalar(F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
+    flat, shape = broadcast_f64(F, K, T, r, sigma)
+    out = _core.black76_speed(*flat)
+    return format_result({"speed": out}, shape, return_as)
+
+
+@overload
+def zomma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def zomma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def zomma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def zomma(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """Zomma: rate of change of gamma with volatility.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
+    # Scalar fast path; same dispatch pattern as price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        return _core.black76_zomma_scalar(F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
+    flat, shape = broadcast_f64(F, K, T, r, sigma)
+    out = _core.black76_zomma(*flat)
+    return format_result({"zomma": out}, shape, return_as)
+
+
+@overload
+def color(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def color(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def color(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def color(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """Color (gamma decay): minus the rate of change of gamma with time-to-expiry, per year.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
+    # Scalar fast path; same dispatch pattern as price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        return _core.black76_color_scalar(F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
+    flat, shape = broadcast_f64(F, K, T, r, sigma)
+    out = _core.black76_color(*flat)
+    return format_result({"color": out}, shape, return_as)
+
+
+@overload
+def veta(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def veta(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def veta(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def veta(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """Veta (vega decay): minus the rate of change of vega with time-to-expiry, per year.
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
+    # Scalar fast path; same dispatch pattern as price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        return _core.black76_veta_scalar(F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
+    flat, shape = broadcast_f64(F, K, T, r, sigma)
+    out = _core.black76_veta(*flat)
+    return format_result({"veta": out}, shape, return_as)
+
+
+@overload
+def ultima(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["numpy"] | None = ...,
+) -> _Result: ...
+@overload
+def ultima(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dict"],
+) -> dict[str, _Result]: ...
+@overload
+def ultima(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def ultima(
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> Formatted:
+    """Ultima: rate of change of vomma with volatility (third order in volatility).
+
+    ``return_as``: ``"numpy"`` (default), ``"dict"``, or ``"dataframe"`` (needs pandas).
+    """
+    # Scalar fast path; same dispatch pattern as price().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        return _core.black76_ultima_scalar(F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
+    flat, shape = broadcast_f64(F, K, T, r, sigma)
+    out = _core.black76_ultima(*flat)
+    return format_result({"ultima": out}, shape, return_as)
+
+
+@overload
+def higher_greeks(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["numpy", "dict"] | None = ...,
+) -> HigherGreeks: ...
+@overload
+def higher_greeks(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: Literal["dataframe"],
+) -> pd.DataFrame: ...
+def higher_greeks(
+    flag: _FlagInput,
+    F: ArrayLike,
+    K: ArrayLike,
+    T: ArrayLike,
+    r: ArrayLike,
+    sigma: ArrayLike,
+    *,
+    return_as: ReturnAs = None,
+) -> HigherGreeksResult:
+    """Compute all eight higher-order Greeks at once.
+
+    Returns a ``HigherGreeks`` typed dict for ``return_as`` ``None``/``"numpy"``/
+    ``"dict"`` (the default), or an eight-column DataFrame for ``"dataframe"``
+    (columns "vanna", "vomma", "charm", "speed", "zomma", "color", "veta", "ultima"; needs pandas).
+
+    Single FFI call into a shared Rust kernel that computes ``d1``/``d2``, the
+    discount factor, and ``pdf(d1)`` once and reuses them across all eight —
+    cheaper than calling each separately. Batches of ~4000 rows or more run on
+    rayon's global thread pool with the GIL released; set ``RAYON_NUM_THREADS=1``
+    to force serial. While the kernel runs (GIL released, and always on
+    free-threaded builds), do not mutate the input arrays from other threads —
+    they are read in place, zero-copy.
+    """
+    # Scalar fast path; same dispatch pattern as greeks().
+    if (
+        (return_as is None or return_as == "numpy")
+        and isinstance(F, SCALAR_NUMERIC)
+        and isinstance(K, SCALAR_NUMERIC)
+        and isinstance(T, SCALAR_NUMERIC)
+        and isinstance(r, SCALAR_NUMERIC)
+        and isinstance(sigma, SCALAR_NUMERIC)
+    ):
+        iflag = scalar_flag_or_none(flag)
+        if iflag is not None:
+            vals = _core.black76_higher_greeks_scalar(iflag, F, K, T, r, sigma)  # pyright: ignore[reportArgumentType]
+            va, vo, ch, sp, zo, co, ve, ul = vals
+            return {
+                "vanna": va,
+                "vomma": vo,
+                "charm": ch,
+                "speed": sp,
+                "zomma": zo,
+                "color": co,
+                "veta": ve,
+                "ultima": ul,
+            }
+    flat, shape = broadcast_f64(F, K, T, r, sigma)
+    flag_arr = normalize_flag(flag, shape).ravel()
+    va, vo, ch, sp, zo, co, ve, ul = _core.black76_higher_greeks(flag_arr, *flat)
+    cols = {
+        "vanna": va,
+        "vomma": vo,
+        "charm": ch,
+        "speed": sp,
+        "zomma": zo,
+        "color": co,
+        "veta": ve,
+        "ultima": ul,
+    }
+    return cast("HigherGreeksResult", format_result(cols, shape, return_as))

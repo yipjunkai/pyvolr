@@ -132,6 +132,7 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 - **Black-Scholes-Merton pricing** — calls and puts with continuous dividend yield
 - **Black-76 pricing** — European options on futures/forwards (`pyvolr.black76`), same vectorized API as `bs`
 - **Analytical Greeks** — delta, gamma, theta, vega, rho (with documented sign and unit conventions)
+- **Higher-order Greeks** — vanna, vomma, charm, speed, zomma, color, veta, ultima (second- and third-order), individually or bundled via `higher_greeks()`; every formula pinned ~1-ULP against 60-digit mpmath references
 - **Robust implied volatility** — Jäckel "Let's Be Rational" algorithm: rational-cubic initial guess plus Householder order-4 iteration converges to ~1e-13 precision in ≤2 iterations across the full no-arbitrage range
 - **Automatic parallelism on large batches** — every array endpoint releases the GIL and dispatches per-row work to rayon's global thread pool above its own measured threshold: `implied_vol` ≥1k rows, bundled `greeks` ≥4k, `price` ≥8k, single Greeks ≥16k (each gate sits above that endpoint's serial-vs-rayon break-even, so small calls never pay rayon's overhead); set `RAYON_NUM_THREADS=1` to opt out
 - **Full numpy broadcasting** — any combination of inputs in any shape, scalar-in scalar-out
@@ -143,7 +144,6 @@ black76.price("c", F=100, K=105, T=0.5, r=0.05, sigma=0.2)
 ## 🗺️ Coming soon
 
 - [ ] Bachelier (normal model, for negative rates) — with analytic implied-normal-vol inversion
-- [ ] Higher-order Greeks (vanna, vomma, charm, speed, zomma, color)
 - [ ] American options (Andersen-Lake-Offengenden spectral collocation)
 - [ ] Volatility surface fitting (arbitrage-free eSSVI)
 
@@ -219,10 +219,13 @@ pyvolr/
 | `bs.theta(flag, S, K, T, r, sigma, q=0)`       | −∂Price/∂T (per year)      | all numeric inputs     |
 | `bs.rho(flag, S, K, T, r, sigma, q=0)`         | ∂Price/∂r (per unit r)     | all numeric inputs     |
 | `bs.greeks(flag, S, K, T, r, sigma, q=0)`      | `dict` of all five Greeks  | all numeric inputs     |
+| `bs.{vanna,vomma,charm,speed,zomma,color,veta,ultima}(...)` | higher-order Greeks | all numeric inputs |
+| `bs.higher_greeks(flag, S, K, T, r, sigma, q=0)` | `dict` of all eight higher-order Greeks | all numeric inputs |
 | `bs.implied_vol(price, flag, S, K, T, r, q=0)` | σ (NaN on bound violation) | price + numeric inputs |
 | `black76.price(flag, F, K, T, r, sigma)`       | option price on a forward  | all numeric inputs     |
 | `black76.{delta,gamma,vega,theta,rho}(...)`    | Greeks for Black-76        | all numeric inputs     |
 | `black76.greeks(flag, F, K, T, r, sigma)`      | `dict` of all five Greeks  | all numeric inputs     |
+| `black76.higher_greeks(flag, F, K, T, r, sigma)` | `dict` of all eight higher-order Greeks | all numeric inputs |
 | `black76.implied_vol(price, flag, F, K, T, r)` | σ (NaN on bound violation) | price + numeric inputs |
 | `pyvolr.compat.py_vollib.…`                    | py_vollib-shaped scalars   | n/a (scalar API)       |
 | `pyvolr.compat.py_vollib_vectorized.…`         | arrays / DataFrame         | all numeric inputs     |
@@ -247,7 +250,7 @@ Commercial sponsorship channels will be added if demand warrants. For now the be
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Particularly welcome: new pricing models (Bachelier, American), higher-order Greeks, and property tests for edge cases.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Particularly welcome: new pricing models (Bachelier, American) and property tests for edge cases.
 
 ## 📄 License
 

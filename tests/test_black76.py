@@ -305,3 +305,71 @@ class TestParallelDispatch:
         assert isinstance(ivs, np.ndarray)
         assert ivs.shape == (n,)
         np.testing.assert_allclose(ivs, sigma, rtol=1e-12)
+
+
+class TestHigherGreeks:
+    """Higher-order Black-76 Greeks: q = r specialization of BSM."""
+
+    _ORDER = ("vanna", "vomma", "charm", "speed", "zomma", "color", "veta", "ultima")
+    _GRID = (
+        ("c", 100.0, 100.0, 1.0, 0.05, 0.20),
+        ("p", 100.0, 120.0, 0.5, 0.03, 0.30),
+        ("c", 49.0, 50.0, 0.3846, 0.05, 0.20),
+    )
+
+    @pytest.mark.parametrize("case", _GRID)
+    def test_matches_bsm_with_q_equal_r(
+        self, case: tuple[str, float, float, float, float, float]
+    ) -> None:
+        # Bit-identical: both resolve to greeks::higher_all(F, K, T, r, r, sigma).
+        # This ties Black-76 to the mpmath goldens transitively (see test_greeks).
+        flag, f, k, t, r, sigma = case
+        b = black76.higher_greeks(flag, F=f, K=k, T=t, r=r, sigma=sigma)
+        m = bs.higher_greeks(flag, S=f, K=k, T=t, r=r, sigma=sigma, q=r)
+        for name in self._ORDER:
+            assert b[name] == m[name], name
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_individual_equals_bundle(self, flag: str) -> None:
+        f, k, t, r, sigma = 100.0, 105.0, 0.5, 0.05, 0.25
+        g = black76.higher_greeks(flag, F=f, K=k, T=t, r=r, sigma=sigma)
+        kw = {"F": f, "K": k, "T": t, "r": r, "sigma": sigma}
+        for name in self._ORDER:
+            # charm needs explicit kwargs (a **dict splat can't match the
+            # overloads under pyright-strict); the rest go through getattr.
+            if name == "charm":
+                got = black76.charm(flag, F=f, K=k, T=t, r=r, sigma=sigma)
+            else:
+                got = getattr(black76, name)(**kw)
+            assert got == pytest.approx(g[name], rel=1e-14, abs=1e-300), name
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_scalar_equals_one_elem_array(self, flag: str) -> None:
+        f, k, t, r, sigma = 100.0, 105.0, 0.5, 0.05, 0.25
+        sc = black76.higher_greeks(flag, F=f, K=k, T=t, r=r, sigma=sigma)
+        ar = black76.higher_greeks(flag, F=np.array([f]), K=k, T=t, r=r, sigma=sigma)
+        for name in self._ORDER:
+            assert sc[name] == np.asarray(ar[name])[0], name
+
+    def test_returns_ordered_dict_of_floats(self) -> None:
+        g = black76.higher_greeks("c", F=100, K=100, T=1.0, r=0.05, sigma=0.20)
+        assert tuple(g.keys()) == self._ORDER
+        for v in g.values():
+            assert isinstance(v, float)
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_parallel_matches_serial(self, flag: str) -> None:
+        # Single-Greek gate (16384) via the tile trick, plus the bundle gate (4096).
+        pk = np.linspace(20.0, 500.0, 384)
+        reps = 48  # 18432 >= SINGLE_GREEK_PARALLEL_THRESHOLD
+        bk = np.tile(pk, reps)
+        f, t, r, sigma = 100.0, 0.5, 0.05, 0.20
+        ref = black76.charm(flag, F=f, K=pk, T=t, r=r, sigma=sigma)
+        got = black76.charm(flag, F=f, K=bk, T=t, r=r, sigma=sigma)
+        np.testing.assert_array_equal(got, np.tile(ref, reps))
+        n = 8192  # > GREEKS_PARALLEL_THRESHOLD
+        strikes = np.linspace(80, 120, n)
+        g = black76.higher_greeks(flag, F=f, K=strikes, T=t, r=r, sigma=sigma)
+        np.testing.assert_allclose(
+            g["ultima"], black76.ultima(F=f, K=strikes, T=t, r=r, sigma=sigma), rtol=1e-14
+        )

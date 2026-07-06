@@ -34,6 +34,8 @@ __all__ = [
     "Formatted",
     "Greeks",
     "GreeksResult",
+    "HigherGreeks",
+    "HigherGreeksResult",
     "OnError",
     "Result",
     "ReturnAs",
@@ -56,6 +58,7 @@ Result = float | NDArray[np.float64]
 ReturnAs: TypeAlias = "Literal['numpy', 'dict', 'dataframe'] | None"
 Formatted: TypeAlias = "Result | dict[str, Result] | pd.DataFrame"
 GreeksResult: TypeAlias = "Greeks | pd.DataFrame"
+HigherGreeksResult: TypeAlias = "HigherGreeks | pd.DataFrame"
 
 # `on_error` governs how `implied_vol` reacts to an unsolvable input (NaN result).
 OnError: TypeAlias = "Literal['warn', 'raise', 'ignore']"
@@ -73,6 +76,24 @@ class Greeks(TypedDict):
     theta: Result
     vega: Result
     rho: Result
+
+
+class HigherGreeks(TypedDict):
+    """The eight higher-order Greeks; each value is a float or ndarray per the
+    input shape. Order matches the Rust ``higher_all`` kernel.
+
+    Re-exported as `pyvolr.bs.HigherGreeks` / `pyvolr.black76.HigherGreeks` for
+    user annotations.
+    """
+
+    vanna: Result
+    vomma: Result
+    charm: Result
+    speed: Result
+    zomma: Result
+    color: Result
+    veta: Result
+    ultima: Result
 
 
 # Types eligible for the scalar fast path. np.floating / np.integer scalars

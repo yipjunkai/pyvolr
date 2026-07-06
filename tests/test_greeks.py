@@ -301,3 +301,180 @@ class TestParallelDispatch:
             bs.vega(S=S, K=pk, T=T, r=r, sigma=sigma),
             bs.vega(S=S, K=bk, T=T, r=r, sigma=sigma),
         )
+
+
+# Higher-order Greek order + mpmath 50-digit goldens (tools/gen_goldens.py,
+# section `greeks.rs::higher_greeks_match_mpmath_goldens`). Tuple order matches
+# the Rust `higher_all` kernel and the `HigherGreeks` dict.
+_HG_ORDER = ("vanna", "vomma", "charm", "speed", "zomma", "color", "veta", "ultima")
+_HG_GOLDENS: dict[tuple[str, float, float, float, float, float, float], tuple[float, ...]] = {
+    # (flag, S, K, T, r, q, sigma): the eight Greeks in _HG_ORDER
+    ("c", 100.0, 100.0, 1.0, 0.05, 0.02, 0.20): (
+        -0.09475289377504355,
+        2.3688223443760887,
+        -0.03563942396482651,
+        -0.00042638802198769604,
+        -0.09356848260285552,
+        0.010446506538698554,
+        -17.00814443262032,
+        -73.28544127913524,
+    ),
+    ("c", 100.0, 120.0, 0.5, 0.03, 0.01, 0.30): (
+        0.9469621924180325,
+        47.29178329769534,
+        -0.31086449941248695,
+        0.00033966826829557055,
+        -0.017078787798722746,
+        0.004298479873034124,
+        -37.298259187916486,
+        -381.6043464146372,
+    ),
+    ("p", 100.0, 90.0, 0.5, 0.05, 0.02, 0.25): (
+        -0.6963059072708816,
+        37.87500714232858,
+        0.11984125058347952,
+        -0.0008894562783342539,
+        -0.03618230478964687,
+        0.011547739256155704,
+        -27.116769994498952,
+        -395.8402301731359,
+    ),
+}
+
+
+class TestHigherGreeksGoldens:
+    """Pin the higher Greeks through the FFI against the mpmath goldens."""
+
+    @pytest.mark.parametrize("key", list(_HG_GOLDENS))
+    def test_bundle_matches_goldens(
+        self, key: tuple[str, float, float, float, float, float, float]
+    ) -> None:
+        flag, s, k, t, r, q, sigma = key
+        g = bs.higher_greeks(flag, S=s, K=k, T=t, r=r, sigma=sigma, q=q)
+        for name, expected in zip(_HG_ORDER, _HG_GOLDENS[key], strict=True):
+            assert g[name] == pytest.approx(expected, rel=1e-12), name
+
+    def test_put_charm_golden(self) -> None:
+        # Only charm depends on the flag; check the put charm at the ATM point.
+        g = bs.higher_greeks("p", S=100.0, K=100.0, T=1.0, r=0.05, sigma=0.20, q=0.02)
+        assert g["charm"] == pytest.approx(-0.05524339743096161, rel=1e-12)
+
+
+class TestHigherGreeksConsistency:
+    S, K, T, r, q, sigma = 100.0, 105.0, 0.5, 0.05, 0.02, 0.25
+
+    def _individual(self, name: str, flag: str, s: object):
+        # charm is the one flag-dependent higher Greek; call it explicitly with
+        # keyword args (a ``**dict`` splat can't be matched to the overloads
+        # under pyright-strict). The rest go through getattr — untyped, but the
+        # tests-only pyright env allows it.
+        if name == "charm":
+            return bs.charm(flag, S=s, K=self.K, T=self.T, r=self.r, sigma=self.sigma, q=self.q)
+        return getattr(bs, name)(S=s, K=self.K, T=self.T, r=self.r, sigma=self.sigma, q=self.q)
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_individual_equals_bundle(self, flag: str) -> None:
+        g = bs.higher_greeks(
+            flag, S=self.S, K=self.K, T=self.T, r=self.r, sigma=self.sigma, q=self.q
+        )
+        for name in _HG_ORDER:
+            # Bundle (`higher_all`) and the standalone fns share bit-identical
+            # expressions in Rust; allow a last-ULP slack to stay robust.
+            got = self._individual(name, flag, self.S)
+            assert got == pytest.approx(g[name], rel=1e-14, abs=1e-300), name
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_scalar_equals_one_elem_array(self, flag: str) -> None:
+        # All-scalar inputs hit the dedicated scalar FFI; a 1-elem array hits the
+        # array endpoint. Same kernel, must be bit-identical.
+        for name in _HG_ORDER:
+            sc = self._individual(name, flag, self.S)
+            ar = self._individual(name, flag, np.array([self.S]))
+            assert sc == np.asarray(ar)[0], name
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_bundle_scalar_equals_one_elem_array(self, flag: str) -> None:
+        sc = bs.higher_greeks(
+            flag, S=self.S, K=self.K, T=self.T, r=self.r, sigma=self.sigma, q=self.q
+        )
+        ar = bs.higher_greeks(
+            flag, S=np.array([self.S]), K=self.K, T=self.T, r=self.r, sigma=self.sigma, q=self.q
+        )
+        for name in _HG_ORDER:
+            assert sc[name] == np.asarray(ar[name])[0], name
+
+
+class TestHigherGreeksDict:
+    def test_returns_ordered_dict_of_floats(self) -> None:
+        g = bs.higher_greeks("c", S=100, K=100, T=1.0, r=0.05, sigma=0.20)
+        assert tuple(g.keys()) == _HG_ORDER
+        for v in g.values():
+            assert isinstance(v, float)
+
+    def test_vectorized(self) -> None:
+        strikes = np.linspace(80, 120, 5)
+        g = bs.higher_greeks("c", S=100, K=strikes, T=0.5, r=0.05, sigma=0.20)
+        for v in g.values():
+            assert isinstance(v, np.ndarray)
+            assert v.shape == (5,)
+
+    def test_dataframe(self) -> None:
+        pytest.importorskip("pandas")
+        df = bs.higher_greeks(
+            "c", S=100, K=np.linspace(80, 120, 4), T=0.5, r=0.05, sigma=0.20, return_as="dataframe"
+        )
+        assert list(df.columns) == list(_HG_ORDER)
+        assert len(df) == 4
+
+
+class TestHigherGreeksDegenerate:
+    """t <= 0 and sigma <= 0 return 0 for all eight (documented policy)."""
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    @pytest.mark.parametrize(("t", "sigma"), [(0.0, 0.20), (1.0, 0.0)])
+    def test_all_zero(self, flag: str, t: float, sigma: float) -> None:
+        g = bs.higher_greeks(flag, S=100.0, K=100.0, T=t, r=0.05, sigma=sigma)
+        for name in _HG_ORDER:
+            assert g[name] == 0.0, name
+        assert bs.charm(flag, S=100.0, K=100.0, T=t, r=0.05, sigma=sigma) == 0.0
+        assert bs.vanna(S=100.0, K=100.0, T=t, r=0.05, sigma=sigma) == 0.0
+
+
+class TestHigherParallelDispatch:
+    """Higher Greeks cross the same rayon gates as the first-order ones."""
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_single_higher_greek_parallel_matches_serial(self, flag: str) -> None:
+        # Tile trick (see TestParallelDispatch): a diverse serial pattern (below
+        # SINGLE_GREEK_PARALLEL_THRESHOLD=16384) tiled past it must match the
+        # parallel result bit-for-bit — independent rows, identical kernel.
+        pk = np.linspace(20.0, 500.0, 384)
+        reps = 48  # 384 * 48 = 18432 >= 16384
+        bk = np.tile(pk, reps)
+        s, t, r, sigma = 100.0, 0.5, 0.05, 0.20
+        for name in ("vanna", "charm", "speed", "veta", "ultima"):
+            if name == "charm":
+                ref = bs.charm(flag, S=s, K=pk, T=t, r=r, sigma=sigma)
+                got = bs.charm(flag, S=s, K=bk, T=t, r=r, sigma=sigma)
+            else:
+                ref = getattr(bs, name)(S=s, K=pk, T=t, r=r, sigma=sigma)
+                got = getattr(bs, name)(S=s, K=bk, T=t, r=r, sigma=sigma)
+            np.testing.assert_array_equal(
+                got, np.tile(ref, reps), err_msg=f"{name} parallel != serial (flag={flag})"
+            )
+
+    @pytest.mark.parametrize("flag", ["c", "p"])
+    def test_bundle_parallel_matches_individual(self, flag: str) -> None:
+        n = 8192  # > GREEKS_PARALLEL_THRESHOLD (4096)
+        strikes = np.linspace(80, 120, n)
+        s, t, r, sigma = 100.0, 0.5, 0.05, 0.20
+        g = bs.higher_greeks(flag, S=s, K=strikes, T=t, r=r, sigma=sigma)
+        np.testing.assert_allclose(
+            g["vanna"], bs.vanna(S=s, K=strikes, T=t, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            g["charm"], bs.charm(flag, S=s, K=strikes, T=t, r=r, sigma=sigma), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            g["ultima"], bs.ultima(S=s, K=strikes, T=t, r=r, sigma=sigma), rtol=1e-14
+        )

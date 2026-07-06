@@ -70,6 +70,24 @@ type GreeksTuple<'py> = (
     Bound<'py, PyArray1<f64>>,
 );
 
+/// One row of higher-order Greeks — the tuple `greeks::higher_all` returns,
+/// in `HigherGreeksTuple` order. Named so the bundled endpoints can spell
+/// `Vec<HigherGreeksRow>` without tripping `clippy::type_complexity`.
+type HigherGreeksRow = (f64, f64, f64, f64, f64, f64, f64, f64);
+
+/// Return type of `bsm_higher_greeks` / `black76_higher_greeks`:
+/// `(vanna, vomma, charm, speed, zomma, color, veta, ultima)`.
+type HigherGreeksTuple<'py> = (
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+);
+
 /// Validate that all input slices share a length; otherwise return a Python
 /// `ValueError`. This is defense-in-depth — the Python wrapper enforces this
 /// upstream via numpy broadcasting.
@@ -203,6 +221,57 @@ define_price_or_greek!(
     SINGLE_GREEK_PARALLEL_THRESHOLD,
     no_flag
 );
+// Higher-order BSM Greeks. Same per-row cost class as the first-order single
+// Greeks, so they share `SINGLE_GREEK_PARALLEL_THRESHOLD`. Only `charm` carries
+// a flag (`N(±d1)` terms); the other seven are call/put-identical.
+define_price_or_greek!(
+    bsm_vanna,
+    greeks::vanna,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_price_or_greek!(
+    bsm_vomma,
+    greeks::vomma,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_price_or_greek!(
+    bsm_charm,
+    greeks::charm,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    with_flag
+);
+define_price_or_greek!(
+    bsm_speed,
+    greeks::speed,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_price_or_greek!(
+    bsm_zomma,
+    greeks::zomma,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_price_or_greek!(
+    bsm_color,
+    greeks::color,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_price_or_greek!(
+    bsm_veta,
+    greeks::veta,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_price_or_greek!(
+    bsm_ultima,
+    greeks::ultima,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
 
 // Black-76 has no `q` parameter (forward, not spot). Otherwise identical
 // macro shape to the BSM bindings above, including the `$threshold` gate.
@@ -298,6 +367,55 @@ define_black76!(
     SINGLE_GREEK_PARALLEL_THRESHOLD,
     no_flag
 );
+// Higher-order Black-76 Greeks (q = r specializations; see `black76`).
+define_black76!(
+    black76_vanna,
+    black76::vanna,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_black76!(
+    black76_vomma,
+    black76::vomma,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_black76!(
+    black76_charm,
+    black76::charm,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    with_flag
+);
+define_black76!(
+    black76_speed,
+    black76::speed,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_black76!(
+    black76_zomma,
+    black76::zomma,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_black76!(
+    black76_color,
+    black76::color,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_black76!(
+    black76_veta,
+    black76::veta,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
+define_black76!(
+    black76_ultima,
+    black76::ultima,
+    SINGLE_GREEK_PARALLEL_THRESHOLD,
+    no_flag
+);
 
 // Scalar fast-path twins: one `#[pyfunction]` per array endpoint, taking
 // plain f64/i8 arguments and returning bare floats — no arrays, no Vec, no
@@ -345,6 +463,42 @@ define_scalar!(
 );
 define_scalar!(bsm_vega_scalar, greeks::vega, no_flag(s, k, t, r, q, sigma));
 define_scalar!(
+    bsm_vanna_scalar,
+    greeks::vanna,
+    no_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(
+    bsm_vomma_scalar,
+    greeks::vomma,
+    no_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(
+    bsm_charm_scalar,
+    greeks::charm,
+    with_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(
+    bsm_speed_scalar,
+    greeks::speed,
+    no_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(
+    bsm_zomma_scalar,
+    greeks::zomma,
+    no_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(
+    bsm_color_scalar,
+    greeks::color,
+    no_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(bsm_veta_scalar, greeks::veta, no_flag(s, k, t, r, q, sigma));
+define_scalar!(
+    bsm_ultima_scalar,
+    greeks::ultima,
+    no_flag(s, k, t, r, q, sigma)
+);
+define_scalar!(
     black76_price_scalar,
     black76::price,
     with_flag(f, k, t, r, sigma)
@@ -374,6 +528,46 @@ define_scalar!(
     black76::vega,
     no_flag(f, k, t, r, sigma)
 );
+define_scalar!(
+    black76_vanna_scalar,
+    black76::vanna,
+    no_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_vomma_scalar,
+    black76::vomma,
+    no_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_charm_scalar,
+    black76::charm,
+    with_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_speed_scalar,
+    black76::speed,
+    no_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_zomma_scalar,
+    black76::zomma,
+    no_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_color_scalar,
+    black76::color,
+    no_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_veta_scalar,
+    black76::veta,
+    no_flag(f, k, t, r, sigma)
+);
+define_scalar!(
+    black76_ultima_scalar,
+    black76::ultima,
+    no_flag(f, k, t, r, sigma)
+);
 
 /// Scalar twin of `bsm_greeks`: `(delta, gamma, vega, theta, rho)` for one option.
 #[pyfunction]
@@ -390,6 +584,22 @@ fn bsm_greeks_scalar(
     greeks::all(Flag::from_i8(flag), s, k, t, r, q, sigma)
 }
 
+/// Scalar twin of `bsm_higher_greeks`:
+/// `(vanna, vomma, charm, speed, zomma, color, veta, ultima)` for one option.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn bsm_higher_greeks_scalar(
+    flag: i8,
+    s: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    q: f64,
+    sigma: f64,
+) -> HigherGreeksRow {
+    greeks::higher_all(Flag::from_i8(flag), s, k, t, r, q, sigma)
+}
+
 /// Scalar twin of `black76_greeks`.
 #[pyfunction]
 fn black76_greeks_scalar(
@@ -401,6 +611,19 @@ fn black76_greeks_scalar(
     sigma: f64,
 ) -> (f64, f64, f64, f64, f64) {
     black76::all(Flag::from_i8(flag), f, k, t, r, sigma)
+}
+
+/// Scalar twin of `black76_higher_greeks`.
+#[pyfunction]
+fn black76_higher_greeks_scalar(
+    flag: i8,
+    f: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    sigma: f64,
+) -> HigherGreeksRow {
+    black76::higher_all(Flag::from_i8(flag), f, k, t, r, sigma)
 }
 
 /// Scalar twin of `bsm_iv`.
@@ -545,6 +768,93 @@ fn bsm_greeks<'py>(
     ))
 }
 
+/// Compute all eight higher-order Greeks in a single pass. See `bsm_greeks` for
+/// the parallel-dispatch story; returns `(vanna, vomma, charm, speed, zomma,
+/// color, veta, ultima)`.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn bsm_higher_greeks<'py>(
+    py: Python<'py>,
+    flag: PyReadonlyArray1<'py, i8>,
+    s: PyReadonlyArray1<'py, f64>,
+    k: PyReadonlyArray1<'py, f64>,
+    t: PyReadonlyArray1<'py, f64>,
+    r: PyReadonlyArray1<'py, f64>,
+    q: PyReadonlyArray1<'py, f64>,
+    sigma: PyReadonlyArray1<'py, f64>,
+) -> PyResult<HigherGreeksTuple<'py>> {
+    let flag = flag.as_slice()?;
+    let s = s.as_slice()?;
+    let k = k.as_slice()?;
+    let t = t.as_slice()?;
+    let r = r.as_slice()?;
+    let q = q.as_slice()?;
+    let sigma = sigma.as_slice()?;
+    let n = check_len(&[
+        flag.len(),
+        s.len(),
+        k.len(),
+        t.len(),
+        r.len(),
+        q.len(),
+        sigma.len(),
+    ])?;
+    let work = |i: usize| {
+        greeks::higher_all(
+            Flag::from_i8(flag[i]),
+            s[i],
+            k[i],
+            t[i],
+            r[i],
+            q[i],
+            sigma[i],
+        )
+    };
+    let mut vanna = Vec::with_capacity(n);
+    let mut vomma = Vec::with_capacity(n);
+    let mut charm = Vec::with_capacity(n);
+    let mut speed = Vec::with_capacity(n);
+    let mut zomma = Vec::with_capacity(n);
+    let mut color = Vec::with_capacity(n);
+    let mut veta = Vec::with_capacity(n);
+    let mut ultima = Vec::with_capacity(n);
+    if n >= GREEKS_PARALLEL_THRESHOLD {
+        let tuples: Vec<HigherGreeksRow> = py.detach(|| (0..n).into_par_iter().map(work).collect());
+        for (va, vo, ch, sp, zo, co, ve, ul) in tuples {
+            vanna.push(va);
+            vomma.push(vo);
+            charm.push(ch);
+            speed.push(sp);
+            zomma.push(zo);
+            color.push(co);
+            veta.push(ve);
+            ultima.push(ul);
+        }
+    } else {
+        for i in 0..n {
+            let (va, vo, ch, sp, zo, co, ve, ul) = work(i);
+            vanna.push(va);
+            vomma.push(vo);
+            charm.push(ch);
+            speed.push(sp);
+            zomma.push(zo);
+            color.push(co);
+            veta.push(ve);
+            ultima.push(ul);
+        }
+    }
+    Ok((
+        vanna.into_pyarray(py),
+        vomma.into_pyarray(py),
+        charm.into_pyarray(py),
+        speed.into_pyarray(py),
+        zomma.into_pyarray(py),
+        color.into_pyarray(py),
+        veta.into_pyarray(py),
+        ultima.into_pyarray(py),
+    ))
+}
+
 /// Compute all five Black-76 Greeks in a single pass. See `bsm_greeks`.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -596,6 +906,73 @@ fn black76_greeks<'py>(
         vega.into_pyarray(py),
         theta.into_pyarray(py),
         rho.into_pyarray(py),
+    ))
+}
+
+/// Compute all eight higher-order Black-76 Greeks in a single pass. See
+/// `bsm_higher_greeks`.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn black76_higher_greeks<'py>(
+    py: Python<'py>,
+    flag: PyReadonlyArray1<'py, i8>,
+    f: PyReadonlyArray1<'py, f64>,
+    k: PyReadonlyArray1<'py, f64>,
+    t: PyReadonlyArray1<'py, f64>,
+    r: PyReadonlyArray1<'py, f64>,
+    sigma: PyReadonlyArray1<'py, f64>,
+) -> PyResult<HigherGreeksTuple<'py>> {
+    let flag = flag.as_slice()?;
+    let f = f.as_slice()?;
+    let k = k.as_slice()?;
+    let t = t.as_slice()?;
+    let r = r.as_slice()?;
+    let sigma = sigma.as_slice()?;
+    let n = check_len(&[flag.len(), f.len(), k.len(), t.len(), r.len(), sigma.len()])?;
+    let work =
+        |i: usize| black76::higher_all(Flag::from_i8(flag[i]), f[i], k[i], t[i], r[i], sigma[i]);
+    let mut vanna = Vec::with_capacity(n);
+    let mut vomma = Vec::with_capacity(n);
+    let mut charm = Vec::with_capacity(n);
+    let mut speed = Vec::with_capacity(n);
+    let mut zomma = Vec::with_capacity(n);
+    let mut color = Vec::with_capacity(n);
+    let mut veta = Vec::with_capacity(n);
+    let mut ultima = Vec::with_capacity(n);
+    if n >= GREEKS_PARALLEL_THRESHOLD {
+        let tuples: Vec<HigherGreeksRow> = py.detach(|| (0..n).into_par_iter().map(work).collect());
+        for (va, vo, ch, sp, zo, co, ve, ul) in tuples {
+            vanna.push(va);
+            vomma.push(vo);
+            charm.push(ch);
+            speed.push(sp);
+            zomma.push(zo);
+            color.push(co);
+            veta.push(ve);
+            ultima.push(ul);
+        }
+    } else {
+        for i in 0..n {
+            let (va, vo, ch, sp, zo, co, ve, ul) = work(i);
+            vanna.push(va);
+            vomma.push(vo);
+            charm.push(ch);
+            speed.push(sp);
+            zomma.push(zo);
+            color.push(co);
+            veta.push(ve);
+            ultima.push(ul);
+        }
+    }
+    Ok((
+        vanna.into_pyarray(py),
+        vomma.into_pyarray(py),
+        charm.into_pyarray(py),
+        speed.into_pyarray(py),
+        zomma.into_pyarray(py),
+        color.into_pyarray(py),
+        veta.into_pyarray(py),
+        ultima.into_pyarray(py),
     ))
 }
 
@@ -660,6 +1037,15 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bsm_theta, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_rho, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_greeks, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_vanna, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_vomma, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_charm, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_speed, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_zomma, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_color, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_veta, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_ultima, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_higher_greeks, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_iv, m)?)?;
     m.add_function(wrap_pyfunction!(black76_price, m)?)?;
     m.add_function(wrap_pyfunction!(black76_delta, m)?)?;
@@ -668,6 +1054,15 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(black76_theta, m)?)?;
     m.add_function(wrap_pyfunction!(black76_rho, m)?)?;
     m.add_function(wrap_pyfunction!(black76_greeks, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_vanna, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_vomma, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_charm, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_speed, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_zomma, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_color, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_veta, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_ultima, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_higher_greeks, m)?)?;
     m.add_function(wrap_pyfunction!(black76_iv, m)?)?;
     // Scalar fast-path twins, in the same order as their array counterparts.
     m.add_function(wrap_pyfunction!(bsm_price_scalar, m)?)?;
@@ -677,6 +1072,15 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bsm_theta_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_rho_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_greeks_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_vanna_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_vomma_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_charm_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_speed_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_zomma_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_color_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_veta_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_ultima_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(bsm_higher_greeks_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(bsm_iv_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(black76_price_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(black76_delta_scalar, m)?)?;
@@ -685,6 +1089,15 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(black76_theta_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(black76_rho_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(black76_greeks_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_vanna_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_vomma_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_charm_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_speed_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_zomma_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_color_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_veta_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_ultima_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(black76_higher_greeks_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(black76_iv_scalar, m)?)?;
     Ok(())
 }
