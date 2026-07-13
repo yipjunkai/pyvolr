@@ -45,7 +45,7 @@ jobs:
       - name: Install cargo-fuzz
         # Prebuilt, checksum-verified binary — the previous `cargo install`
         # compiled it from source on every run.
-        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2.82.7
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
         with:
           tool: cargo-fuzz@0.13.2
       - name: Restore evolved corpus
