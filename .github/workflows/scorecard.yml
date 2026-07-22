@@ -11,8 +11,9 @@ on:
   branch_protection_rule:
   schedule:
     - cron: "0 4 * * 1" # weekly Monday 04:00 UTC
-  push:
-    branches: [main]
+  # No push trigger: Scorecard measures repo *posture*, which doesn't change per
+  # commit. The weekly cron + branch_protection_rule (+ manual dispatch) keep the
+  # badge and Code Scanning SARIF fresh without re-running on every merge to main.
   workflow_dispatch:
 
 concurrency:

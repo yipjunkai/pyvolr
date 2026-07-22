@@ -27,6 +27,11 @@ concurrency:
 jobs:
   perf:
     name: perf-gate
+    # Skip release-please's release PR: it bumps only version fields + CHANGELOG
+    # (no source), so there is nothing to bench — yet it trips this workflow's
+    # Cargo.lock/Cargo.toml path filter. head_ref is empty on dispatch, so a
+    # manual run still benches.
+    if: ${{ github.head_ref != 'release-please--branches--main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

@@ -30,6 +30,11 @@ permissions:
 jobs:
   smoke:
     name: linux abi3 wheel
+    # Skip release-please's release PR: it trips the packaging-path filter
+    # (crates/core/Cargo.toml version bump) but changes no packaging config.
+    # release.yml (its workflow_dispatch dry-run, then the tag build) is the real
+    # packaging gate. head_ref is empty on dispatch, so a manual run still smokes.
+    if: ${{ github.head_ref != 'release-please--branches--main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

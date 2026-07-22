@@ -48,6 +48,11 @@ permissions:
 jobs:
   cargo-audit:
     name: cargo audit
+    # Skip release-please's release PR: it re-syncs Cargo.lock (tripping the
+    # dep-path filter) but never changes third-party pins — Dependabot moves
+    # those, and the daily cron catches newly published advisories. head_ref is
+    # empty on schedule/push, so those still audit.
+    if: ${{ github.head_ref != 'release-please--branches--main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -68,6 +73,9 @@ jobs:
 
   pip-audit:
     name: pip audit
+    # See cargo-audit above: skip release-please's release PR (no dependency
+    # change to audit; the daily cron and Dependabot cover advisories).
+    if: ${{ github.head_ref != 'release-please--branches--main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

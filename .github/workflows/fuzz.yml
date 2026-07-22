@@ -20,6 +20,10 @@ permissions:
 jobs:
   fuzz:
     name: fuzz (${{ matrix.target }})
+    # Skip release-please's release PR: it touches fuzz/Cargo.lock (tripping the
+    # path filter) but changes no fuzzable source. head_ref is empty on
+    # schedule/dispatch, so the nightly fuzz run is unaffected.
+    if: ${{ github.head_ref != 'release-please--branches--main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:

@@ -36,9 +36,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      # code = "not a docs-only change": docs is 'true' only when every changed
-      # file matched the docs filter, so invert it.
-      code: ${{ steps.filter.outputs.docs != 'true' }}
+      # code = "a real code change worth the heavy suite". False when the change
+      # is docs-only (docs filter matched every file, so invert it) OR it's
+      # release-please's release PR, which bumps only version fields + CHANGELOG
+      # (no source) yet trips the non-docs filter — release.yml on tag-push is
+      # the real gate for that. All the heavy jobs below gate on this one output,
+      # so skipping here skips them all while ci-passed still reports green
+      # (skipped counts as OK). head_ref is empty on push/schedule/dispatch, so a
+      # push to main still runs the full suite.
+      code: ${{ steps.filter.outputs.docs != 'true' && github.head_ref != 'release-please--branches--main' }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
