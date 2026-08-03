@@ -27,7 +27,7 @@ jobs:
       matrix:
         target: [bsm_price, iv_solve, black76_price, greeks_all, black76_greeks_all]
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           # pyo3 (transitively required via pyvolr-core) needs a Python
@@ -45,7 +45,7 @@ jobs:
       - name: Install cargo-fuzz
         # Prebuilt, checksum-verified binary — the previous `cargo install`
         # compiled it from source on every run.
-        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2.82.7
+        uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.5
         with:
           tool: cargo-fuzz@0.13.2
       - name: Restore evolved corpus
