@@ -35,7 +35,7 @@ jobs:
       # threshold catches real regressions (>10%) while absorbing noise.
       PERF_THRESHOLD: "0.10"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Need both base and PR head accessible locally to flip between them.
           fetch-depth: 0
@@ -45,7 +45,7 @@ jobs:
           # pyo3 needs a Python interpreter on PATH to satisfy abi3-py310 at
           # build time. extension-module is off when running benches.
           python-version: "3.12"
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: perf
 
