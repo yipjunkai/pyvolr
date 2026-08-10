@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -41,7 +41,7 @@ jobs:
       - name: Export locked test deps for in-wheel verification
         run: uv export --locked --extra test --no-emit-project --output-file requirements-wheel-test.txt
       - name: Build + test the abi3 + free-threaded wheels with cibuildwheel
-        uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55 # v4.1.0
+        uses: pypa/cibuildwheel@1828c10ab37f080699c7b81cea34097c684a7074 # v4.2.0
         env:
           # Two build IDs: the abi3 wheel that serves every GIL CPython >= 3.10,
           # plus one free-threaded build. The t-selector keeps the smoke covering

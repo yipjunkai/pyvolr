@@ -27,7 +27,7 @@ jobs:
       matrix:
         target: [bsm_price, iv_solve, black76_price, greeks_all, black76_greeks_all]
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           # pyo3 (transitively required via pyvolr-core) needs a Python
@@ -39,13 +39,13 @@ jobs:
         # there and nothing in this workflow needs to stay in sync.
         run: rustup toolchain install
         working-directory: fuzz
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: fuzz
       - name: Install cargo-fuzz
         # Prebuilt, checksum-verified binary — the previous `cargo install`
         # compiled it from source on every run.
-        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2.82.7
+        uses: taiki-e/install-action@6c6fd71fe4fb72c3697d269963d0e15df8adedad # v2.85.10
         with:
           tool: cargo-fuzz@0.13.2
       - name: Restore evolved corpus
