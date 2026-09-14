@@ -4,7 +4,7 @@
 # day" into the published wheels — the sole floating code-execution input to a
 # release. Keep in lockstep with uv.lock's maturin and the CIBW_BEFORE_BUILD
 # pins in release.yml / wheel-smoke.yml (all 1.13.3 today); bump them together.
-requires = ["maturin==1.13.3"]
+requires = ["maturin==1.15.0"]
 build-backend = "maturin"
 
 [project]
