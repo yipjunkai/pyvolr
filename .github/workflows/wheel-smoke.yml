@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -41,7 +41,7 @@ jobs:
       - name: Export locked test deps for in-wheel verification
         run: uv export --locked --extra test --no-emit-project --output-file requirements-wheel-test.txt
       - name: Build + test the abi3 + free-threaded wheels with cibuildwheel
-        uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55 # v4.1.0
+        uses: pypa/cibuildwheel@b3395e271a35f73dad77f21802abe9b986dfe299 # v4.3.1
         env:
           # Two build IDs: the abi3 wheel that serves every GIL CPython >= 3.10,
           # plus one free-threaded build. The t-selector keeps the smoke covering
@@ -58,7 +58,7 @@ jobs:
           CIBW_BEFORE_BUILD: "pip install maturin==1.13.3"
           CIBW_BEFORE_TEST: "pip install -r {project}/requirements-wheel-test.txt"
           CIBW_TEST_COMMAND: "pytest {project}/tests -ra"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wheel-smoke
           path: wheelhouse/*.whl

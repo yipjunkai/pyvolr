@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
@@ -37,7 +37,7 @@ jobs:
         run: |
           uv sync --locked --extra dev --no-install-project
           uv run --no-sync maturin sdist --out dist
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sdist
           path: dist/*.tar.gz
@@ -64,7 +64,7 @@ jobs:
           - { runner: macos-14,         target: x86_64+aarch64, cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp314t-*", archs: "x86_64 arm64" }
           - { runner: windows-latest,   target: x86_64,         cibw: "cp310-* cp311-* cp312-* cp313-* cp314-* cp314t-*", archs: "auto" }
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -80,7 +80,7 @@ jobs:
         shell: bash
         run: uv export --locked --extra test --no-emit-project --output-file requirements-wheel-test.txt
       - name: Build wheels with cibuildwheel
-        uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55 # v4.1.0
+        uses: pypa/cibuildwheel@b3395e271a35f73dad77f21802abe9b986dfe299 # v4.3.1
         env:
           CIBW_BUILD: ${{ matrix.platform.cibw }}
           CIBW_ARCHS: ${{ matrix.platform.archs }}
@@ -132,7 +132,7 @@ jobs:
           # be broken — or subverted — by an upstream release that day.
           CIBW_BEFORE_TEST: "pip install -r {project}/requirements-wheel-test.txt"
           CIBW_TEST_COMMAND: "pytest {project}/tests -ra"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wheels-${{ matrix.platform.runner }}-${{ matrix.platform.target }}
           path: wheelhouse/*.whl
@@ -157,12 +157,12 @@ jobs:
     permissions:
       id-token: write  # Required for Trusted Publishing (OIDC).
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: dist
           merge-multiple: true
       - name: Publish to PyPI via Trusted Publishing
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           skip-existing: true
           print-hash: true
@@ -178,8 +178,8 @@ jobs:
       id-token: write      # mint the OIDC token for keyless Sigstore signing
       attestations: write  # persist the provenance to the GitHub attestations API
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: dist
           merge-multiple: true
@@ -191,7 +191,7 @@ jobs:
       # isn't GA, and the record is only a preview indexing feature we don't use.
       - name: Attest build provenance
         id: attest
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
           create-storage-record: false
@@ -203,7 +203,7 @@ jobs:
         env:
           BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
         run: cp "$BUNDLE_PATH" "dist/pyvolr-${GITHUB_REF_NAME}.sigstore.json"
-      - uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           generate_release_notes: true
           files: dist/*
